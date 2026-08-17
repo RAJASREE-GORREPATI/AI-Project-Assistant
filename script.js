@@ -15,13 +15,19 @@ const API_BASE_URL =
 
 
 // ============================================================
+// GLOBAL STATE
+// ============================================================
+
+let analysisInProgress = false;
+let analysisStartedAt = null;
+
+
+// ============================================================
 // SAFE ELEMENT HELPER
 // ============================================================
 
 function getElement(id) {
-
     return document.getElementById(id);
-
 }
 
 
@@ -41,7 +47,6 @@ function escapeHtml(value) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-
 }
 
 
@@ -69,9 +74,161 @@ function formatText(value) {
     }
 
     return escapeHtml(value)
+        .replace(/\r\n/g, "\n")
         .replace(/\n\n+/g, "<br><br>")
         .replace(/\n/g, "<br>");
+}
 
+
+// ============================================================
+// OBJECT TO TEXT
+// ============================================================
+
+function objectToText(value) {
+
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    if (typeof value === "string") {
+        return value;
+    }
+
+    if (typeof value === "number" || typeof value === "boolean") {
+        return String(value);
+    }
+
+    if (typeof value === "object") {
+
+        return (
+            value.description ||
+            value.detail ||
+            value.accomplishment ||
+            value.reason ||
+            value.overview ||
+            value.name ||
+            value.title ||
+            value.area ||
+            value.focus ||
+            value.step ||
+            value.action ||
+            ""
+        );
+
+    }
+
+    return String(value);
+}
+
+
+// ============================================================
+// PARSE POSSIBLE CLAUDE JSON
+// ============================================================
+
+function parsePossibleJSON(value) {
+
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    if (typeof value === "object") {
+        return value;
+    }
+
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    let text = value.trim();
+
+
+    // Remove markdown JSON fences
+
+    text = text
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+
+
+    try {
+
+        return JSON.parse(text);
+
+    } catch (error) {
+
+        console.warn(
+            "Unable to parse JSON:",
+            error
+        );
+
+        return null;
+
+    }
+
+}
+
+
+// ============================================================
+// NORMALIZE API RESPONSE
+// ============================================================
+
+function normalizeHealthResponse(data) {
+
+    if (!data) {
+        return null;
+    }
+
+
+    // Normal response
+
+    if (
+        data.summary ||
+        data.projects ||
+        data.challenges ||
+        data.learning
+    ) {
+
+        return data;
+
+    }
+
+
+    // Backend may return Claude error + raw response
+
+    if (data.raw_response) {
+
+        const parsed =
+            parsePossibleJSON(
+                data.raw_response
+            );
+
+
+        if (parsed) {
+            return parsed;
+        }
+
+    }
+
+
+    // Sometimes the backend puts JSON inside answer
+
+    if (data.answer) {
+
+        const parsed =
+            parsePossibleJSON(
+                data.answer
+            );
+
+
+        if (parsed) {
+            return parsed;
+        }
+
+    }
+
+
+    return data;
 }
 
 
@@ -104,6 +261,7 @@ function quickAsk(question) {
     const input =
         getElement("question");
 
+
     if (!input) {
 
         console.error(
@@ -114,7 +272,10 @@ function quickAsk(question) {
 
     }
 
-    input.value = question;
+
+    input.value =
+        question;
+
 
     askQuestion();
 
@@ -161,12 +322,18 @@ async function askQuestion() {
 
     if (!question) {
 
-        wrapper.style.display = "block";
+        wrapper.style.display =
+            "block";
+
 
         answer.innerHTML = `
+
             <div class="error-message">
+
                 Please enter a question.
+
             </div>
+
         `;
 
         input.focus();
@@ -180,7 +347,8 @@ async function askQuestion() {
     // LOADING
     // --------------------------------------------------------
 
-    button.disabled = true;
+    button.disabled =
+        true;
 
     button.innerText =
         "Thinking...";
@@ -191,13 +359,17 @@ async function askQuestion() {
 
 
     answer.innerHTML = `
+
         <div class="loading">
+
             <div class="loading-spinner"></div>
 
             <span>
                 Searching your internship knowledge...
             </span>
+
         </div>
+
     `;
 
 
@@ -232,18 +404,15 @@ async function askQuestion() {
             );
 
 
-        // ----------------------------------------------------
-        // READ RESPONSE
-        // ----------------------------------------------------
-
         let data = null;
+
 
         try {
 
             data =
                 await response.json();
 
-        } catch (jsonError) {
+        } catch (error) {
 
             throw new Error(
                 `Server returned ${response.status} with an invalid response.`
@@ -251,10 +420,6 @@ async function askQuestion() {
 
         }
 
-
-        // ----------------------------------------------------
-        // HTTP ERROR
-        // ----------------------------------------------------
 
         if (!response.ok) {
 
@@ -266,10 +431,6 @@ async function askQuestion() {
 
         }
 
-
-        // ----------------------------------------------------
-        // DISPLAY
-        // ----------------------------------------------------
 
         displayAnswer(data);
 
@@ -298,7 +459,7 @@ async function askQuestion() {
                 </p>
 
                 <small>
-                    The backend is deployed at:
+                    Backend:
                     ${escapeHtml(API_BASE_URL)}
                 </small>
 
@@ -308,7 +469,8 @@ async function askQuestion() {
 
     } finally {
 
-        button.disabled = false;
+        button.disabled =
+            false;
 
         button.innerText =
             "Ask AI →";
@@ -329,18 +491,14 @@ function displayAnswer(data) {
 
 
     if (!answer) {
-
-        console.error(
-            "answerContent element not found."
-        );
-
         return;
-
     }
 
 
     const answerText =
-        data?.answer ||
+        objectToText(
+            data?.answer
+        ) ||
         "No answer was returned.";
 
 
@@ -389,18 +547,19 @@ function displayAnswer(data) {
         keyPoints.forEach(
             point => {
 
+                const text =
+                    objectToText(point);
+
+
+                if (!text) {
+                    return;
+                }
+
+
                 html += `
 
                     <li>
-                        ${formatText(
-                            typeof point === "object"
-                                ? (
-                                    point.description ||
-                                    point.title ||
-                                    JSON.stringify(point)
-                                )
-                                : point
-                        )}
+                        ${formatText(text)}
                     </li>
 
                 `;
@@ -442,20 +601,27 @@ function displayAnswer(data) {
         sources.forEach(
             source => {
 
+                const sourceName =
+                    typeof source === "object"
+                        ? (
+                            source.name ||
+                            source.filename ||
+                            source.file ||
+                            source.title ||
+                            ""
+                        )
+                        : source;
+
+
+                if (!sourceName) {
+                    return;
+                }
+
+
                 html += `
 
                     <span class="source-tag">
-
-                        ${escapeHtml(
-                            typeof source === "object"
-                                ? (
-                                    source.name ||
-                                    source.filename ||
-                                    JSON.stringify(source)
-                                )
-                                : source
-                        )}
-
+                        ${escapeHtml(sourceName)}
                     </span>
 
                 `;
@@ -477,6 +643,18 @@ function displayAnswer(data) {
 
     answer.innerHTML =
         html;
+
+
+    // Keep answer visible
+
+    const wrapper =
+        getElement("answerWrapper");
+
+
+    if (wrapper) {
+        wrapper.style.display =
+            "block";
+    }
 
 }
 
@@ -500,10 +678,10 @@ async function healthCheck() {
         getElement("healthStatus");
 
 
-    if (!button || !empty || !content || !status) {
+    if (!button) {
 
         console.error(
-            "Health check elements were not found."
+            "healthButton not found."
         );
 
         return;
@@ -511,46 +689,73 @@ async function healthCheck() {
     }
 
 
+    analysisInProgress =
+        true;
+
+    analysisStartedAt =
+        Date.now();
+
+
     // --------------------------------------------------------
-    // LOADING
+    // LOADING STATE
     // --------------------------------------------------------
 
-    button.disabled = true;
+    button.disabled =
+        true;
 
     button.innerText =
         "Analyzing...";
 
 
-    status.innerText =
-        "Analyzing...";
+    if (status) {
+
+        status.innerText =
+            "Analyzing...";
+
+    }
 
 
-    empty.style.display =
-        "block";
+    if (empty) {
+
+        empty.style.display =
+            "block";
 
 
-    content.style.display =
-        "none";
+        empty.innerHTML = `
+
+            <div class="empty-symbol">
+                ✦
+            </div>
+
+            <h3>
+                Analyzing internship knowledge
+            </h3>
+
+            <p>
+                Claude is reviewing your internship
+                knowledge and organizing projects,
+                accomplishments, challenges,
+                technologies, learning, and next steps.
+            </p>
+
+        `;
+
+    }
 
 
-    empty.innerHTML = `
+    if (content) {
 
-        <div class="empty-symbol">
-            ✦
-        </div>
+        content.style.display =
+            "none";
 
-        <h3>
-            Analyzing internship
-        </h3>
+    }
 
-        <p>
-            Claude is reviewing your internship
-            knowledge and identifying projects,
-            accomplishments, challenges,
-            learning, and next steps.
-        </p>
 
-    `;
+    // Show connection card
+
+    showConnectionDetails(
+        "analyzing"
+    );
 
 
     try {
@@ -577,18 +782,15 @@ async function healthCheck() {
             );
 
 
-        // ----------------------------------------------------
-        // PARSE RESPONSE
-        // ----------------------------------------------------
-
         let data = null;
+
 
         try {
 
             data =
                 await response.json();
 
-        } catch (jsonError) {
+        } catch (error) {
 
             throw new Error(
                 `Server returned ${response.status} with invalid JSON.`
@@ -596,10 +798,6 @@ async function healthCheck() {
 
         }
 
-
-        // ----------------------------------------------------
-        // ERROR
-        // ----------------------------------------------------
 
         if (!response.ok) {
 
@@ -612,33 +810,96 @@ async function healthCheck() {
         }
 
 
-        if (data?.error) {
+        // Normalize response
+
+        data =
+            normalizeHealthResponse(
+                data
+            );
+
+
+        if (!data) {
 
             throw new Error(
-                data.message ||
-                data.error
+                "The backend returned no analysis data."
             );
 
         }
 
 
+        // Handle Claude raw response error
+
+        if (
+            data.error &&
+            !data.summary &&
+            !data.projects
+        ) {
+
+            const parsed =
+                normalizeHealthResponse(data);
+
+
+            if (
+                parsed &&
+                (
+                    parsed.summary ||
+                    parsed.projects
+                )
+            ) {
+
+                data =
+                    parsed;
+
+            } else {
+
+                throw new Error(
+                    data.message ||
+                    data.error ||
+                    "Claude returned an invalid analysis."
+                );
+
+            }
+
+        }
+
+
         // ----------------------------------------------------
-        // DISPLAY DATA
+        // DISPLAY HEALTH DATA
         // ----------------------------------------------------
 
         displayHealthData(data);
 
 
-        empty.style.display =
-            "none";
+        if (empty) {
+
+            empty.style.display =
+                "none";
+
+        }
 
 
-        content.style.display =
-            "block";
+        if (content) {
+
+            content.style.display =
+                "block";
+
+        }
 
 
-        status.innerText =
-            "Analyzed";
+        if (status) {
+
+            status.innerText =
+                "Analyzed";
+
+        }
+
+
+        // Connection card after analysis
+
+        showConnectionDetails(
+            "connected",
+            data
+        );
 
 
     } catch (error) {
@@ -649,47 +910,75 @@ async function healthCheck() {
         );
 
 
-        status.innerText =
-            "Error";
+        if (status) {
+
+            status.innerText =
+                "Error";
+
+        }
 
 
-        empty.style.display =
-            "block";
+        if (empty) {
+
+            empty.style.display =
+                "block";
 
 
-        content.style.display =
-            "none";
+            empty.innerHTML = `
+
+                <div class="empty-symbol">
+                    !
+                </div>
+
+                <h3>
+                    Analysis failed
+                </h3>
+
+                <p>
+                    ${escapeHtml(
+                        error.message ||
+                        "Unable to analyze internship."
+                    )}
+                </p>
+
+                <button
+                    class="health-button"
+                    onclick="healthCheck()"
+                >
+                    Try Again
+                </button>
+
+            `;
+
+        }
 
 
-        empty.innerHTML = `
+        if (content) {
 
-            <div class="empty-symbol">
-                !
-            </div>
+            content.style.display =
+                "none";
 
-            <h3>
-                Analysis failed
-            </h3>
+        }
 
-            <p>
-                ${escapeHtml(
-                    error.message ||
-                    "Unable to analyze internship."
-                )}
-            </p>
 
-            <button
-                class="health-button"
-                onclick="healthCheck()"
-            >
-                Try Again
-            </button>
-
-        `;
+        showConnectionDetails(
+            "error",
+            null,
+            error.message
+        );
 
     } finally {
 
-        button.disabled = false;
+        analysisInProgress =
+            false;
+
+
+        analysisStartedAt =
+            null;
+
+
+        button.disabled =
+            false;
 
         button.innerText =
             "Run AI Analysis";
@@ -767,18 +1056,22 @@ function displayHealthData(data) {
         Number(
             summary.technology_count
         ) ||
-        0;
+        arrayValue(
+            data?.technologies
+        ).length;
 
 
     // --------------------------------------------------------
-    // CURRENT HTML HAS THESE ELEMENTS
+    // EXISTING COUNT ELEMENTS
     // --------------------------------------------------------
 
     const highCount =
         getElement("highCount");
 
+
     const attentionCount =
         getElement("attentionCount");
+
 
     const trackCount =
         getElement("trackCount");
@@ -809,7 +1102,7 @@ function displayHealthData(data) {
 
 
     // --------------------------------------------------------
-    // STATUS
+    // HEALTH TITLE
     // --------------------------------------------------------
 
     const healthTitle =
@@ -825,6 +1118,10 @@ function displayHealthData(data) {
     }
 
 
+    // --------------------------------------------------------
+    // HEALTH INDICATOR
+    // --------------------------------------------------------
+
     const indicator =
         getElement("healthIndicator");
 
@@ -838,16 +1135,7 @@ function displayHealthData(data) {
 
 
     // --------------------------------------------------------
-    // OVERVIEW
-    // --------------------------------------------------------
-
-    const overview =
-        summary.overview ||
-        "No overview documented.";
-
-
-    // --------------------------------------------------------
-    // FINDINGS CONTAINER
+    // FINDINGS
     // --------------------------------------------------------
 
     const findings =
@@ -868,13 +1156,18 @@ function displayHealthData(data) {
     let html = "";
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // OVERVIEW
-    // --------------------------------------------------------
+    // ========================================================
+
+    const overview =
+        summary.overview ||
+        "No overview documented.";
+
 
     html += `
 
-        <div class="finding-card">
+        <div class="finding-card overview-card">
 
             <div class="finding-title">
                 Overview
@@ -889,137 +1182,202 @@ function displayHealthData(data) {
     `;
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // PROJECTS
-    // --------------------------------------------------------
+    // ========================================================
 
     if (projects.length > 0) {
 
         html += `
+
             <div class="section-label">
                 Projects
             </div>
+
+            <div class="health-card-grid">
+
         `;
 
 
         projects.forEach(
-            item => {
+            (item, index) => {
 
                 html +=
-                    createHealthCard(
-                        item
+                    createStructuredCard(
+                        item,
+                        index + 1,
+                        "project"
                     );
 
             }
         );
 
+
+        html += `
+
+            </div>
+
+        `;
+
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // ACCOMPLISHMENTS
-    // --------------------------------------------------------
+    // ========================================================
 
     if (accomplishments.length > 0) {
 
         html += `
+
             <div class="section-label">
                 Accomplishments
             </div>
+
+            <div class="health-card-grid">
+
         `;
 
 
         accomplishments.forEach(
-            item => {
+            (item, index) => {
 
                 html +=
-                    createHealthCard(
-                        item
+                    createStructuredCard(
+                        item,
+                        index + 1,
+                        "accomplishment"
                     );
 
             }
         );
 
+
+        html += `
+
+            </div>
+
+        `;
+
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // CHALLENGES
-    // --------------------------------------------------------
+    // ========================================================
 
     if (challenges.length > 0) {
 
         html += `
+
             <div class="section-label">
                 Challenges
             </div>
+
+            <div class="health-card-grid">
+
         `;
 
 
         challenges.forEach(
-            item => {
+            (item, index) => {
 
                 html +=
-                    createHealthCard(
-                        item
+                    createStructuredCard(
+                        item,
+                        index + 1,
+                        "challenge"
                     );
 
             }
         );
 
+
+        html += `
+
+            </div>
+
+        `;
+
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // LEARNING
-    // --------------------------------------------------------
+    // ========================================================
 
     if (learning.length > 0) {
 
         html += `
+
             <div class="section-label">
                 Learning
             </div>
+
+            <div class="health-card-grid">
+
         `;
 
 
         learning.forEach(
-            item => {
+            (item, index) => {
 
                 html +=
-                    createHealthCard(
-                        item
+                    createStructuredCard(
+                        item,
+                        index + 1,
+                        "learning"
                     );
 
             }
         );
+
+
+        html += `
+
+            </div>
+
+        `;
 
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // CURRENT FOCUS
-    // --------------------------------------------------------
+    // ========================================================
 
     if (currentFocus.length > 0) {
 
         html += `
+
             <div class="section-label">
                 Current Focus
             </div>
+
+            <div class="health-card-grid">
+
         `;
 
 
         currentFocus.forEach(
-            item => {
+            (item, index) => {
 
                 html +=
-                    createHealthCard(
-                        item
+                    createStructuredCard(
+                        item,
+                        index + 1,
+                        "focus"
                     );
 
             }
         );
+
+
+        html += `
+
+            </div>
+
+        `;
 
     }
 
@@ -1028,9 +1386,9 @@ function displayHealthData(data) {
         html;
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // NEXT STEPS
-    // --------------------------------------------------------
+    // ========================================================
 
     const recommendedActions =
         getElement(
@@ -1070,10 +1428,14 @@ function displayHealthData(data) {
 
 
 // ============================================================
-// HEALTH CARD
+// STRUCTURED HEALTH CARD
 // ============================================================
 
-function createHealthCard(item) {
+function createStructuredCard(
+    item,
+    number,
+    type
+) {
 
     // --------------------------------------------------------
     // STRING
@@ -1085,11 +1447,19 @@ function createHealthCard(item) {
 
         return `
 
-            <div class="finding-card">
+            <div class="finding-card structured-card">
 
-                <p>
-                    ${formatText(item)}
-                </p>
+                <div class="card-number">
+                    ${number}
+                </div>
+
+                <div class="card-body">
+
+                    <div class="finding-title">
+                        ${formatText(item)}
+                    </div>
+
+                </div>
 
             </div>
 
@@ -1097,10 +1467,6 @@ function createHealthCard(item) {
 
     }
 
-
-    // --------------------------------------------------------
-    // OBJECT
-    // --------------------------------------------------------
 
     if (
         !item ||
@@ -1112,14 +1478,23 @@ function createHealthCard(item) {
     }
 
 
+    // --------------------------------------------------------
+    // TITLE
+    // --------------------------------------------------------
+
     const title =
         item.name ||
         item.title ||
         item.area ||
         item.focus ||
         item.step ||
+        item.action ||
         "Internship Item";
 
+
+    // --------------------------------------------------------
+    // DESCRIPTION
+    // --------------------------------------------------------
 
     const description =
         item.description ||
@@ -1129,10 +1504,18 @@ function createHealthCard(item) {
         "";
 
 
+    // --------------------------------------------------------
+    // STATUS
+    // --------------------------------------------------------
+
     const status =
         item.status ||
         "";
 
+
+    // --------------------------------------------------------
+    // SOURCES
+    // --------------------------------------------------------
 
     const sources =
         arrayValue(
@@ -1142,25 +1525,39 @@ function createHealthCard(item) {
 
     let html = `
 
-        <div class="finding-card">
+        <div class="finding-card structured-card">
 
-            <div class="finding-title">
-
-                ${escapeHtml(title)}
-
+            <div class="card-number">
+                ${number}
             </div>
+
+            <div class="card-body">
+
+                <div class="finding-title">
+                    ${escapeHtml(title)}
+                </div>
 
     `;
 
 
+    // --------------------------------------------------------
+    // STATUS BADGE
+    // --------------------------------------------------------
+
     if (status) {
+
+        const statusClass =
+            getStatusClass(
+                status
+            );
+
 
         html += `
 
-            <div class="finding-status">
-
-                ${escapeHtml(status)}
-
+            <div class="finding-status ${statusClass}">
+                ${escapeHtml(
+                    formatStatus(status)
+                )}
             </div>
 
         `;
@@ -1168,11 +1565,15 @@ function createHealthCard(item) {
     }
 
 
+    // --------------------------------------------------------
+    // DESCRIPTION
+    // --------------------------------------------------------
+
     if (description) {
 
         html += `
 
-            <p>
+            <p class="finding-description">
                 ${formatText(description)}
             </p>
 
@@ -1181,22 +1582,60 @@ function createHealthCard(item) {
     }
 
 
+    // --------------------------------------------------------
+    // RESOURCES
+    // --------------------------------------------------------
+
     if (sources.length > 0) {
 
         html += `
 
-            <div class="finding-sources">
+            <div class="resource-block">
 
-                ${sources
-                    .map(
-                        source => `
-                            <span>
-                                ${escapeHtml(source)}
-                            </span>
-                        `
-                    )
-                    .join("")
+                <div class="resource-label">
+                    Resources
+                </div>
+
+                <div class="finding-sources">
+
+        `;
+
+
+        sources.forEach(
+            source => {
+
+                const sourceName =
+                    typeof source === "object"
+                        ? (
+                            source.name ||
+                            source.filename ||
+                            source.file ||
+                            source.title ||
+                            ""
+                        )
+                        : source;
+
+
+                if (!sourceName) {
+                    return;
                 }
+
+
+                html += `
+
+                    <span class="resource-tag">
+                        ${escapeHtml(sourceName)}
+                    </span>
+
+                `;
+
+            }
+        );
+
+
+        html += `
+
+                </div>
 
             </div>
 
@@ -1207,12 +1646,87 @@ function createHealthCard(item) {
 
     html += `
 
+            </div>
+
         </div>
 
     `;
 
 
     return html;
+
+}
+
+
+// ============================================================
+// STATUS CLASS
+// ============================================================
+
+function getStatusClass(status) {
+
+    const value =
+        String(status)
+            .toLowerCase();
+
+
+    if (
+        value.includes("complete")
+    ) {
+
+        return "status-completed";
+
+    }
+
+
+    if (
+        value.includes("progress")
+    ) {
+
+        return "status-progress";
+
+    }
+
+
+    if (
+        value.includes("block")
+    ) {
+
+        return "status-blocked";
+
+    }
+
+
+    if (
+        value.includes("encounter")
+    ) {
+
+        return "status-encountered";
+
+    }
+
+
+    return "status-default";
+
+}
+
+
+// ============================================================
+// FORMAT STATUS
+// ============================================================
+
+function formatStatus(status) {
+
+    if (!status) {
+        return "";
+    }
+
+
+    const text =
+        String(status);
+
+
+    return text.charAt(0).toUpperCase() +
+        text.slice(1);
 
 }
 
@@ -1254,7 +1768,7 @@ function createActionCard(step) {
         step.action ||
         step.step ||
         step.title ||
-        "";
+        "Next step";
 
 
     const reason =
@@ -1289,7 +1803,416 @@ function createActionCard(step) {
 
 
 // ============================================================
-// DEBUG / CONNECTION TEST
+// CONNECTION DETAILS
+// ============================================================
+
+function showConnectionDetails(
+    state,
+    data = null,
+    errorMessage = ""
+) {
+
+    // --------------------------------------------------------
+    // Find Knowledge Layer card
+    // --------------------------------------------------------
+
+    const knowledgeLayer =
+        findKnowledgeLayer();
+
+
+    if (!knowledgeLayer) {
+
+        console.warn(
+            "Knowledge Layer container not found."
+        );
+
+        return;
+
+    }
+
+
+    // Avoid duplicate cards
+
+    let card =
+        document.getElementById(
+            "connectionDetailsCard"
+        );
+
+
+    if (!card) {
+
+        card =
+            document.createElement(
+                "div"
+            );
+
+
+        card.id =
+            "connectionDetailsCard";
+
+
+        card.className =
+            "connection-details-card";
+
+
+        knowledgeLayer.insertAdjacentElement(
+            "afterend",
+            card
+        );
+
+    }
+
+
+    // --------------------------------------------------------
+    // Status
+    // --------------------------------------------------------
+
+    let overallStatus =
+        "Connected";
+
+
+    let overallClass =
+        "connection-good";
+
+
+    if (state === "analyzing") {
+
+        overallStatus =
+            "Analyzing...";
+
+        overallClass =
+            "connection-working";
+
+    }
+
+
+    if (state === "error") {
+
+        overallStatus =
+            "Connection Error";
+
+        overallClass =
+            "connection-error";
+
+    }
+
+
+    // --------------------------------------------------------
+    // Analysis information
+    // --------------------------------------------------------
+
+    let analysisText =
+        "Ready to answer questions from your internship knowledge.";
+
+
+    if (state === "analyzing") {
+
+        analysisText =
+            "Claude is analyzing the connected internship knowledge.";
+
+    }
+
+
+    if (state === "error") {
+
+        analysisText =
+            errorMessage ||
+            "The analysis could not be completed.";
+
+    }
+
+
+    if (state === "connected") {
+
+        analysisText =
+            "Knowledge successfully analyzed and available to the assistant.";
+
+    }
+
+
+    // --------------------------------------------------------
+    // Counts
+    // --------------------------------------------------------
+
+    const summary =
+        data?.summary || {};
+
+
+    const projects =
+        Number(
+            summary.project_count
+        ) ||
+        arrayValue(
+            data?.projects
+        ).length;
+
+
+    const challenges =
+        Number(
+            summary.challenge_count
+        ) ||
+        arrayValue(
+            data?.challenges
+        ).length;
+
+
+    const technologies =
+        Number(
+            summary.technology_count
+        ) ||
+        arrayValue(
+            data?.technologies
+        ).length;
+
+
+    // --------------------------------------------------------
+    // HTML
+    // --------------------------------------------------------
+
+    card.innerHTML = `
+
+        <div class="connection-header">
+
+            <div>
+
+                <div class="connection-title">
+                    Connection Details
+                </div>
+
+                <div class="connection-subtitle">
+                    Live status of the AI knowledge pipeline
+                </div>
+
+            </div>
+
+            <span class="connection-status ${overallClass}">
+                ${escapeHtml(overallStatus)}
+            </span>
+
+        </div>
+
+
+        <div class="connection-items">
+
+            <div class="connection-item">
+
+                <div class="connection-icon">
+                    ◈
+                </div>
+
+                <div class="connection-info">
+
+                    <strong>
+                        Obsidian Vault
+                    </strong>
+
+                    <span>
+                        Internship knowledge source
+                    </span>
+
+                </div>
+
+                <span class="connection-badge good">
+                    Connected
+                </span>
+
+            </div>
+
+
+            <div class="connection-item">
+
+                <div class="connection-icon">
+                    ✦
+                </div>
+
+                <div class="connection-info">
+
+                    <strong>
+                        Claude Sonnet
+                    </strong>
+
+                    <span>
+                        AI reasoning engine
+                    </span>
+
+                </div>
+
+                <span class="connection-badge good">
+                    Active
+                </span>
+
+            </div>
+
+
+            <div class="connection-item">
+
+                <div class="connection-icon">
+                    ↝
+                </div>
+
+                <div class="connection-info">
+
+                    <strong>
+                        FastAPI Backend
+                    </strong>
+
+                    <span>
+                        ${escapeHtml(
+                            API_BASE_URL
+                        )}
+                    </span>
+
+                </div>
+
+                <span class="connection-badge good">
+                    Online
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="connection-analysis">
+
+            <div class="connection-analysis-title">
+                Analysis Status
+            </div>
+
+            <div class="connection-analysis-text">
+                ${escapeHtml(
+                    analysisText
+                )}
+            </div>
+
+
+            <div class="connection-stats">
+
+                <div class="connection-stat">
+
+                    <strong>
+                        ${projects}
+                    </strong>
+
+                    <span>
+                        Projects
+                    </span>
+
+                </div>
+
+
+                <div class="connection-stat">
+
+                    <strong>
+                        ${challenges}
+                    </strong>
+
+                    <span>
+                        Challenges
+                    </span>
+
+                </div>
+
+
+                <div class="connection-stat">
+
+                    <strong>
+                        ${technologies}
+                    </strong>
+
+                    <span>
+                        Technologies
+                    </span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    `;
+
+}
+
+
+// ============================================================
+// FIND KNOWLEDGE LAYER
+// ============================================================
+
+function findKnowledgeLayer() {
+
+    // First try common IDs
+
+    const knownIds = [
+        "knowledgeLayer",
+        "knowledge-layer",
+        "knowledgeContainer"
+    ];
+
+
+    for (
+        const id of knownIds
+    ) {
+
+        const element =
+            getElement(id);
+
+
+        if (element) {
+            return element;
+        }
+
+    }
+
+
+    // Search visible headings
+
+    const headings =
+        document.querySelectorAll(
+            "h1, h2, h3, h4, .card-title, .section-title"
+        );
+
+
+    for (
+        const heading of headings
+    ) {
+
+        const text =
+            heading.textContent
+                .trim()
+                .toLowerCase();
+
+
+        if (
+            text ===
+            "knowledge layer"
+        ) {
+
+            return (
+                heading.closest(
+                    ".card"
+                ) ||
+                heading.closest(
+                    ".panel"
+                ) ||
+                heading.closest(
+                    ".section"
+                ) ||
+                heading.parentElement?.parentElement
+            );
+
+        }
+
+    }
+
+
+    return null;
+
+}
+
+
+// ============================================================
+// BACKEND TEST
 // ============================================================
 
 async function testBackend() {
@@ -1301,6 +2224,10 @@ async function testBackend() {
                 `${API_BASE_URL}/health`,
                 {
                     method: "GET",
+                    headers: {
+                        "Accept":
+                            "application/json"
+                    },
                     cache: "no-store"
                 }
             );
@@ -1325,6 +2252,7 @@ async function testBackend() {
             error
         );
 
+
         return null;
 
     }
@@ -1333,7 +2261,86 @@ async function testBackend() {
 
 
 // ============================================================
-// PAGE INITIALIZATION
+// MAKE QUICK BUTTONS WORK
+// ============================================================
+
+function initializeQuickButtons() {
+
+    // Buttons using data-question
+
+    const buttons =
+        document.querySelectorAll(
+            "[data-question]"
+        );
+
+
+    buttons.forEach(
+        button => {
+
+            button.addEventListener(
+                "click",
+                function () {
+
+                    const question =
+                        this.getAttribute(
+                            "data-question"
+                        );
+
+
+                    if (question) {
+
+                        quickAsk(
+                            question
+                        );
+
+                    }
+
+                }
+            );
+
+        }
+    );
+
+
+    // Buttons with quick-question class
+
+    const quickButtons =
+        document.querySelectorAll(
+            ".quick-question"
+        );
+
+
+    quickButtons.forEach(
+        button => {
+
+            button.addEventListener(
+                "click",
+                function () {
+
+                    const question =
+                        this.dataset.question ||
+                        this.innerText.trim();
+
+
+                    if (question) {
+
+                        quickAsk(
+                            question
+                        );
+
+                    }
+
+                }
+            );
+
+        }
+    );
+
+}
+
+
+// ============================================================
+// INITIALIZE APP
 // ============================================================
 
 function initializeApp() {
@@ -1348,8 +2355,6 @@ function initializeApp() {
         API_BASE_URL
     );
 
-
-    // Check that the important HTML elements exist.
 
     console.log(
         "Question input:",
@@ -1388,6 +2393,22 @@ function initializeApp() {
 
 
     // --------------------------------------------------------
+    // QUICK BUTTONS
+    // --------------------------------------------------------
+
+    initializeQuickButtons();
+
+
+    // --------------------------------------------------------
+    // CONNECTION CARD
+    // --------------------------------------------------------
+
+    showConnectionDetails(
+        "connected"
+    );
+
+
+    // --------------------------------------------------------
     // BACKEND TEST
     // --------------------------------------------------------
 
@@ -1397,17 +2418,8 @@ function initializeApp() {
 
 
 // ============================================================
-// MAKE FUNCTIONS AVAILABLE TO HTML onclick
+// GLOBAL FUNCTIONS FOR HTML
 // ============================================================
-//
-// Your HTML uses:
-//
-// onclick="askQuestion()"
-// onclick="quickAsk(...)"
-// onclick="healthCheck()"
-//
-// These must exist on window.
-//
 
 window.handleEnter =
     handleEnter;
@@ -1430,7 +2442,8 @@ window.testBackend =
 // ============================================================
 
 if (
-    document.readyState === "loading"
+    document.readyState ===
+    "loading"
 ) {
 
     document.addEventListener(
