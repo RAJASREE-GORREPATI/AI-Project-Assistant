@@ -5,6 +5,16 @@ It uses your Obsidian project knowledge as context for AI-assisted interactions.
 
 ---
 
+🌐 Live Demo
+
+🚀 Frontend:
+https://ai-project-assistant-kappa.vercel.app/
+
+🔗 Backend API:
+https://ai-project-assistant-kappa.vercel.app/docs
+
+💡 Open the Frontend URL to use the AI Project Assistant.
+
 ## ✨ Features
 
 * 🤖 AI-powered project assistance
