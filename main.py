@@ -403,37 +403,34 @@ USER QUESTION:
 # INTERNSHIP HEALTH CHECK
 # ============================================================
 
-
-So your backend rejects it as invalid JSON. The uploaded output confirms this. :contentReference[oaicite:0]{index=0}
-
-### One important correction
-
-The fix I gave you should handle the code fence, **but your response is also getting quite large**. Let's make the parsing more robust.
-
-In `main.py`, replace your `/health-check` function with the version below:
-
-```python
-
 @app.get("/health-check")
 def internship_health_check():
 
     try:
+
+        check_environment()
+
+        if anthropic_client is None:
+            raise RuntimeError(
+                "Anthropic client was not initialized."
+            )
+
         context = get_project_context()
+
+        if not context.strip():
+
+            raise RuntimeError(
+                "No internship notes were found."
+            )
 
         prompt = f"""
 You are an AI Internship Intelligence Assistant.
 
 Analyze the real internship notes below.
 
-Return ONLY valid JSON.
+Do not invent information.
 
-IMPORTANT:
-- Do NOT use Markdown.
-- Do NOT use ```json.
-- Do NOT use ``` at all.
-- The first character of your response must be {{
-- The last character of your response must be }}
-- Do not write anything before or after the JSON.
+Return ONLY valid JSON.
 
 Use exactly this structure:
 
@@ -445,26 +442,31 @@ Use exactly this structure:
         "technology_count": 0,
         "overview": ""
     }},
+
     "projects": [],
+
     "accomplishments": [],
+
     "challenges": [],
+
     "learning": [],
+
     "current_focus": [],
+
     "next_steps": []
 }}
 
 Rules:
 
-- Use ONLY information from the internship notes.
-- Do not invent information.
-- project_count must reflect documented projects.
-- challenge_count must reflect documented challenges.
-- technology_count must reflect documented technologies.
-- Distinguish completed, in progress, blocked, resolved, and planned.
-- Keep descriptions concise.
-- Sources must contain exact note filenames.
-- Do not create unsupported next steps.
+- Use ONLY the internship notes.
+- Do not invent projects or challenges.
+- Do not invent architectural decisions.
+- Do not claim RAG, fine-tuning, SSO, etc. unless documented.
+- Sources must contain exact filenames.
+- Distinguish completed, in progress, blocked and planned.
 - Do not turn missing documentation into a problem.
+- Use recent notes for current focus.
+- Keep the response concise.
 
 REAL INTERNSHIP NOTES:
 
@@ -473,7 +475,7 @@ REAL INTERNSHIP NOTES:
 
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=8000,
+            max_tokens=4000,
             messages=[
                 {
                     "role": "user",
@@ -484,57 +486,31 @@ REAL INTERNSHIP NOTES:
 
         raw_result = response.content[0].text.strip()
 
-        # ----------------------------------------------------
-        # REMOVE MARKDOWN CODE FENCES
-        # ----------------------------------------------------
-
-        if "```json" in raw_result:
-
-            raw_result = raw_result.replace("```json", "", 1)
-
-        if "```" in raw_result:
-
-            raw_result = raw_result.replace("```", "")
-
-        raw_result = raw_result.strip()
-
-        # ----------------------------------------------------
-        # FIND JSON OBJECT
-        # ----------------------------------------------------
-
-        start = raw_result.find("{")
-        end = raw_result.rfind("}")
-
-        if start != -1 and end != -1:
-
-            raw_result = raw_result[start:end + 1]
-
-        # ----------------------------------------------------
-        # PARSE JSON
-        # ----------------------------------------------------
-
         try:
 
-            result = json.loads(raw_result)
+            return json.loads(raw_result)
 
-            return result
-
-        except json.JSONDecodeError as error:
-
-            print("JSON parsing error:", error)
-            print("Claude response:")
-            print(raw_result)
+        except json.JSONDecodeError:
 
             return {
                 "error": "Claude returned invalid JSON.",
-                "details": str(error),
                 "raw_response": raw_result
             }
 
     except Exception as error:
 
-        print("Health check error:", error)
+        print(
+            "ERROR in /health-check:"
+        )
 
-        return {
-            "error": f"Error while processing /health-check: {str(error)}"
-        }
+        print(
+            repr(error)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Error while generating internship "
+                f"health check: {str(error)}"
+            )
+        )
