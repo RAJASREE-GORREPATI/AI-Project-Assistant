@@ -122,6 +122,27 @@ function objectToText(value) {
 
 
 // ============================================================
+// CLEAN SOURCE NAME
+// ------------------------------------------------------------
+// Some backend/vault filenames already end in ".md" before they
+// reach the frontend, and something upstream appends another
+// ".md" on top of that (e.g. "Technologies.md.md"). This just
+// collapses a duplicated extension so tags render cleanly.
+// ============================================================
+
+function cleanSourceName(value) {
+
+    if (!value) {
+        return "";
+    }
+
+    return String(value)
+        .replace(/(\.md)+$/i, ".md");
+
+}
+
+
+// ============================================================
 // PARSE POSSIBLE CLAUDE JSON
 // ============================================================
 
@@ -601,7 +622,7 @@ function displayAnswer(data) {
         sources.forEach(
             source => {
 
-                const sourceName =
+                const rawName =
                     typeof source === "object"
                         ? (
                             source.name ||
@@ -611,6 +632,10 @@ function displayAnswer(data) {
                             ""
                         )
                         : source;
+
+
+                const sourceName =
+                    cleanSourceName(rawName);
 
 
                 if (!sourceName) {
@@ -1604,7 +1629,7 @@ function createStructuredCard(
         sources.forEach(
             source => {
 
-                const sourceName =
+                const rawName =
                     typeof source === "object"
                         ? (
                             source.name ||
@@ -1614,6 +1639,10 @@ function createStructuredCard(
                             ""
                         )
                         : source;
+
+
+                const sourceName =
+                    cleanSourceName(rawName);
 
 
                 if (!sourceName) {
@@ -1804,6 +1833,15 @@ function createActionCard(step) {
 
 // ============================================================
 // CONNECTION DETAILS
+// ------------------------------------------------------------
+// This card is now rendered INSIDE the Knowledge Layer panel's
+// .knowledge-body (appended after the existing knowledge rows),
+// instead of being inserted as a sibling of the panel itself.
+// Previously it used insertAdjacentElement("afterend", card) on
+// the whole panel, which made it a THIRD item in the 2-column
+// .dashboard grid — it auto-placed into row 2 / column 1, which
+// is what caused the Knowledge Layer column to keep growing and
+// misaligning as the left "Internship Overview" panel filled up.
 // ============================================================
 
 function showConnectionDetails(
@@ -1813,14 +1851,14 @@ function showConnectionDetails(
 ) {
 
     // --------------------------------------------------------
-    // Find Knowledge Layer card
+    // Find Knowledge Layer body (where the card should live)
     // --------------------------------------------------------
 
-    const knowledgeLayer =
-        findKnowledgeLayer();
+    const knowledgeBody =
+        findKnowledgeLayerBody();
 
 
-    if (!knowledgeLayer) {
+    if (!knowledgeBody) {
 
         console.warn(
             "Knowledge Layer container not found."
@@ -1855,8 +1893,9 @@ function showConnectionDetails(
             "connection-details-card";
 
 
-        knowledgeLayer.insertAdjacentElement(
-            "afterend",
+        // Append inside the panel body, not after the panel.
+
+        knowledgeBody.appendChild(
             card
         );
 
@@ -2136,17 +2175,23 @@ function showConnectionDetails(
 
 
 // ============================================================
-// FIND KNOWLEDGE LAYER
+// FIND KNOWLEDGE LAYER BODY
+// ------------------------------------------------------------
+// Returns the .knowledge-body element inside the Knowledge
+// Layer panel (not the whole panel), so the connection card can
+// be appended inside it rather than inserted as a sibling of
+// the panel in the dashboard grid.
 // ============================================================
 
-function findKnowledgeLayer() {
+function findKnowledgeLayerBody() {
 
-    // First try common IDs
+    // First try common IDs, in case the body itself has one.
 
     const knownIds = [
         "knowledgeLayer",
         "knowledge-layer",
-        "knowledgeContainer"
+        "knowledgeContainer",
+        "knowledgeBody"
     ];
 
 
@@ -2165,11 +2210,12 @@ function findKnowledgeLayer() {
     }
 
 
-    // Search visible headings
+    // Search visible headings for "Knowledge Layer", then
+    // resolve to that panel's .knowledge-body.
 
     const headings =
         document.querySelectorAll(
-            "h1, h2, h3, h4, .card-title, .section-title"
+            "h1, h2, h3, h4, .card-title, .section-title, .panel-heading"
         );
 
 
@@ -2188,17 +2234,28 @@ function findKnowledgeLayer() {
             "knowledge layer"
         ) {
 
-            return (
-                heading.closest(
-                    ".card"
-                ) ||
+            const panel =
                 heading.closest(
                     ".panel"
                 ) ||
                 heading.closest(
-                    ".section"
+                    ".card"
                 ) ||
-                heading.parentElement?.parentElement
+                heading.closest(
+                    ".section"
+                );
+
+
+            if (!panel) {
+                return null;
+            }
+
+
+            return (
+                panel.querySelector(
+                    ".knowledge-body"
+                ) ||
+                panel
             );
 
         }
