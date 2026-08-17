@@ -2,7 +2,6 @@
 <html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
 
     <meta
@@ -10,60 +9,37 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>Internship Memory</title>
+    <title>AI Internship Memory Assistant</title>
 
     <link
         rel="stylesheet"
         href="style.css"
     >
-
 </head>
 
-
 <body>
-
-
-<!-- =========================================================
-     TOP BAR
-========================================================= -->
 
 <header class="topbar">
 
     <div class="brand">
-
-        <div class="brand-mark">
-            ✦
-        </div>
+        <div class="brand-mark">✦</div>
 
         <div class="brand-name">
             Internship Memory
         </div>
-
     </div>
 
-
     <div class="connection">
-
         <span class="connection-dot"></span>
-
         Obsidian connected
-
     </div>
 
 </header>
 
 
-
-<!-- =========================================================
-     MAIN PAGE
-========================================================= -->
-
 <main class="page">
 
-
-    <!-- =====================================================
-         HERO
-    ===================================================== -->
+    <!-- HERO -->
 
     <section class="hero">
 
@@ -71,18 +47,15 @@
             INTERNSHIP INTELLIGENCE
         </div>
 
-
         <h1>
             Your internship, understood.
         </h1>
-
 
         <p>
             Search your internship knowledge, understand your
             projects, track your progress, and turn your
             experience into actionable insight.
         </p>
-
 
         <div class="ai-core">
             ✦
@@ -91,10 +64,7 @@
     </section>
 
 
-
-    <!-- =====================================================
-         ASK AI
-    ===================================================== -->
+    <!-- ASK AI -->
 
     <section class="ask-section">
 
@@ -108,9 +78,7 @@
                     type="text"
                     placeholder="Ask anything about your internship..."
                     autocomplete="off"
-                    onkeydown="handleEnter(event)"
                 >
-
 
                 <button
                     id="askButton"
@@ -125,21 +93,9 @@
         </div>
 
 
-
-        <!-- =================================================
-             QUICK PROMPTS
-        ================================================= -->
+        <!-- QUICK QUESTIONS -->
 
         <div class="quick-prompts">
-
-
-            <button
-                class="quick-prompt"
-                onclick="quickAsk('Summarize my internship progress so far.')"
-            >
-                Internship Progress
-            </button>
-
 
             <button
                 class="quick-prompt"
@@ -148,7 +104,6 @@
                 My Projects
             </button>
 
-
             <button
                 class="quick-prompt"
                 onclick="quickAsk('What technologies and tools did I use during my internship?')"
@@ -156,6 +111,12 @@
                 Technologies
             </button>
 
+            <button
+                class="quick-prompt"
+                onclick="quickAsk('What accomplishments did I achieve during my internship?')"
+            >
+                Accomplishments
+            </button>
 
             <button
                 class="quick-prompt"
@@ -164,16 +125,12 @@
                 Challenges
             </button>
 
-
         </div>
 
     </section>
 
 
-
-    <!-- =====================================================
-         AI RESPONSE
-    ===================================================== -->
+    <!-- AI RESPONSE -->
 
     <section
         id="answerWrapper"
@@ -182,19 +139,13 @@
 
         <div class="answer-card">
 
-
-            <!-- ANSWER HEADER -->
-
             <div class="answer-header">
 
                 <div>
-
                     <div class="answer-title">
                         AI Response
                     </div>
-
                 </div>
-
 
                 <div class="answer-label">
                     INTERNSHIP KNOWLEDGE
@@ -203,59 +154,42 @@
             </div>
 
 
-
-            <!-- ANSWER CONTENT -->
-
             <div
                 id="answerContent"
                 class="answer-content"
-            ></div>
-
+            >
+                Ask a question to search your internship knowledge.
+            </div>
 
         </div>
 
     </section>
 
 
-
-    <!-- =====================================================
-         DASHBOARD
-    ===================================================== -->
+    <!-- DASHBOARD -->
 
     <section class="dashboard">
 
 
-        <!-- =================================================
-             INTERNSHIP OVERVIEW
-        ================================================= -->
+        <!-- INTERNSHIP OVERVIEW -->
 
         <div class="panel">
-
-
-            <!-- PANEL HEADER -->
 
             <div class="panel-header">
 
                 <div>
 
                     <div class="panel-heading">
-
                         <strong>
                             Internship Overview
                         </strong>
-
                     </div>
 
-
                     <div class="panel-subtitle">
-
-                        AI analysis of your internship
-                        knowledge
-
+                        AI analysis of your internship knowledge
                     </div>
 
                 </div>
-
 
                 <span
                     id="healthStatus"
@@ -267,10 +201,7 @@
             </div>
 
 
-
-            <!-- =================================================
-                 EMPTY STATE
-            ================================================= -->
+            <!-- EMPTY STATE -->
 
             <div
                 id="healthEmpty"
@@ -281,18 +212,15 @@
                     ◌
                 </div>
 
-
                 <h3>
                     No analysis yet
                 </h3>
-
 
                 <p>
                     Let Claude review your internship knowledge
                     to summarize your projects, accomplishments,
                     challenges, learning, and next steps.
                 </p>
-
 
                 <button
                     id="healthButton"
@@ -305,21 +233,14 @@
             </div>
 
 
-
-            <!-- =================================================
-                 HEALTH CONTENT
-            ================================================= -->
+            <!-- HEALTH CONTENT -->
 
             <div
                 id="healthContent"
                 class="health-content"
             >
 
-
-                <!-- SUMMARY -->
-
                 <div class="health-summary">
-
 
                     <div class="health-status-left">
 
@@ -328,15 +249,11 @@
                             class="health-indicator"
                         ></span>
 
-
                         <div>
 
-                            <strong
-                                id="healthTitle"
-                            >
+                            <strong id="healthTitle">
                                 Internship Progress
                             </strong>
-
 
                             <span>
                                 AI-generated assessment
@@ -345,7 +262,6 @@
                         </div>
 
                     </div>
-
 
                     <button
                         class="reanalyze-button"
@@ -357,18 +273,11 @@
                 </div>
 
 
-
-                <!-- =================================================
-                     STATISTICS
-                ================================================= -->
+                <!-- STATISTICS -->
 
                 <div class="health-stats">
 
-
-                    <!-- PROJECTS -->
-
-                    <div class="health-stat high">
-
+                    <div class="health-stat">
                         <span
                             id="highCount"
                             class="health-stat-number"
@@ -376,19 +285,13 @@
                             0
                         </span>
 
-
                         <span class="health-stat-label">
                             Projects
                         </span>
-
                     </div>
 
 
-
-                    <!-- CHALLENGES -->
-
-                    <div class="health-stat attention">
-
+                    <div class="health-stat">
                         <span
                             id="attentionCount"
                             class="health-stat-number"
@@ -396,19 +299,13 @@
                             0
                         </span>
 
-
                         <span class="health-stat-label">
                             Challenges
                         </span>
-
                     </div>
 
 
-
-                    <!-- TECHNOLOGIES -->
-
-                    <div class="health-stat track">
-
+                    <div class="health-stat">
                         <span
                             id="trackCount"
                             class="health-stat-number"
@@ -416,21 +313,15 @@
                             0
                         </span>
 
-
                         <span class="health-stat-label">
                             Technologies
                         </span>
-
                     </div>
-
 
                 </div>
 
 
-
-                <!-- =================================================
-                     FINDINGS
-                ================================================= -->
+                <!-- FINDINGS -->
 
                 <div
                     id="healthFindings"
@@ -438,66 +329,45 @@
                 ></div>
 
 
-
-                <!-- =================================================
-                     NEXT STEPS
-                ================================================= -->
+                <!-- NEXT STEPS -->
 
                 <div class="actions">
 
-
                     <div class="section-label">
-
                         Recommended Next Steps
-
                     </div>
-
 
                     <div
                         id="recommendedActions"
                         class="recommended-actions"
                     ></div>
 
-
                 </div>
-
 
             </div>
 
         </div>
 
 
-
-        <!-- =================================================
-             KNOWLEDGE LAYER
-        ================================================= -->
+        <!-- KNOWLEDGE LAYER -->
 
         <div class="panel">
-
-
-            <!-- PANEL HEADER -->
 
             <div class="panel-header">
 
                 <div>
 
                     <div class="panel-heading">
-
                         <strong>
                             Knowledge Layer
                         </strong>
-
                     </div>
 
-
                     <div class="panel-subtitle">
-
                         Sources powering the assistant
-
                     </div>
 
                 </div>
-
 
                 <span class="panel-status">
                     LIVE
@@ -506,23 +376,16 @@
             </div>
 
 
-
-            <!-- KNOWLEDGE COMPONENTS -->
-
             <div class="knowledge-body">
 
 
-                <!-- =================================================
-                     OBSIDIAN
-                ================================================= -->
+                <!-- OBSIDIAN -->
 
                 <div class="knowledge-row">
-
 
                     <div class="knowledge-icon">
                         ◈
                     </div>
-
 
                     <div class="knowledge-info">
 
@@ -530,13 +393,11 @@
                             Obsidian Vault
                         </strong>
 
-
                         <span>
                             Internship knowledge source
                         </span>
 
                     </div>
-
 
                     <div class="live-badge">
                         Connected
@@ -545,18 +406,13 @@
                 </div>
 
 
-
-                <!-- =================================================
-                     CLAUDE
-                ================================================= -->
+                <!-- CLAUDE -->
 
                 <div class="knowledge-row">
-
 
                     <div class="knowledge-icon">
                         ✦
                     </div>
-
 
                     <div class="knowledge-info">
 
@@ -564,13 +420,11 @@
                             Claude Sonnet 4.6
                         </strong>
 
-
                         <span>
                             AI reasoning engine
                         </span>
 
                     </div>
-
 
                     <div class="live-badge">
                         Active
@@ -579,18 +433,13 @@
                 </div>
 
 
-
-                <!-- =================================================
-                     REST API
-                ================================================= -->
+                <!-- REST API -->
 
                 <div class="knowledge-row">
-
 
                     <div class="knowledge-icon">
                         ⌁
                     </div>
-
 
                     <div class="knowledge-info">
 
@@ -598,13 +447,11 @@
                             Obsidian REST API
                         </strong>
 
-
                         <span>
                             Knowledge integration
                         </span>
 
                     </div>
-
 
                     <div class="live-badge">
                         Connected
@@ -612,26 +459,16 @@
 
                 </div>
 
-
             </div>
 
         </div>
 
-
     </section>
-
 
 </main>
 
 
-
-<!-- =========================================================
-     JAVASCRIPT
-========================================================= -->
-
 <script src="script.js"></script>
 
-
 </body>
-
 </html>

@@ -1,18 +1,37 @@
-/* ==========================================================
-   API CONFIGURATION
-========================================================== */
-
-// LOCAL DEVELOPMENT
-const API_BASE_URL = "http://127.0.0.1:8000";
-
-// When FastAPI is deployed, change the line above to:
-//
-// const API_BASE_URL = "https://your-backend-url.com";
+// ============================================================
+// AI INTERNSHIP MEMORY ASSISTANT
+// FRONTEND JAVASCRIPT
+// ============================================================
 
 
-/* ==========================================================
-   ENTER KEY
-========================================================== */
+// ============================================================
+// BACKEND URL
+// ============================================================
+
+const API_BASE_URL =
+    "https://ai-project-assistant-kappa.vercel.app";
+
+
+// ============================================================
+// ELEMENTS
+// ============================================================
+
+const questionInput =
+    document.getElementById("question");
+
+const askButton =
+    document.getElementById("askButton");
+
+const answerWrapper =
+    document.getElementById("answerWrapper");
+
+const answerContent =
+    document.getElementById("answerContent");
+
+
+// ============================================================
+// ENTER KEY
+// ============================================================
 
 function handleEnter(event) {
 
@@ -23,70 +42,76 @@ function handleEnter(event) {
 }
 
 
-/* ==========================================================
-   QUICK PROMPTS
-========================================================== */
+// ============================================================
+// QUICK QUESTIONS
+// ============================================================
 
 function quickAsk(question) {
 
-    document.getElementById("question").value = question;
+    questionInput.value = question;
 
     askQuestion();
 
 }
 
 
-/* ==========================================================
-   ASK AI
-========================================================== */
+// ============================================================
+// ASK AI
+// ============================================================
 
 async function askQuestion() {
 
-    const input =
-        document.getElementById("question");
-
-    const button =
-        document.getElementById("askButton");
-
-    const wrapper =
-        document.getElementById("answerWrapper");
-
-    const answer =
-        document.getElementById("answerContent");
-
     const question =
-        input.value.trim();
+        questionInput.value.trim();
 
+
+    // --------------------------------------------------------
+    // VALIDATION
+    // --------------------------------------------------------
 
     if (!question) {
 
-        input.focus();
+        answerWrapper.classList.add("visible");
+
+        answerContent.innerHTML = `
+            <div class="error-message">
+                Please enter a question.
+            </div>
+        `;
 
         return;
-
     }
 
 
-    wrapper.style.display = "block";
+    // --------------------------------------------------------
+    // LOADING STATE
+    // --------------------------------------------------------
+
+    askButton.disabled = true;
+
+    askButton.innerHTML =
+        "Thinking...";
 
 
-    answer.innerHTML = `
-        <div class="ai-loading">
-            <span class="loading-dot"></span>
+    answerWrapper.classList.add("visible");
+
+
+    answerContent.innerHTML = `
+        <div class="loading">
+            <div class="loading-spinner"></div>
 
             <span>
-                Analyzing your internship knowledge...
+                Searching your internship knowledge...
             </span>
         </div>
     `;
 
 
-    button.disabled = true;
-
-    button.innerText = "Thinking...";
-
-
     try {
+
+        // ----------------------------------------------------
+        // API REQUEST
+        // ----------------------------------------------------
 
         const response = await fetch(
             `${API_BASE_URL}/ask`,
@@ -94,7 +119,8 @@ async function askQuestion() {
                 method: "POST",
 
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
                 },
 
                 body: JSON.stringify({
@@ -104,397 +130,273 @@ async function askQuestion() {
         );
 
 
+        // ----------------------------------------------------
+        // HANDLE HTTP ERRORS
+        // ----------------------------------------------------
+
         if (!response.ok) {
 
-            throw new Error(
-                "Request failed"
-            );
+            let errorMessage =
+                `Server returned ${response.status}`;
 
+            try {
+
+                const errorData =
+                    await response.json();
+
+                if (errorData.detail) {
+                    errorMessage =
+                        errorData.detail;
+                }
+
+            } catch (error) {
+                // Ignore JSON parsing error
+            }
+
+            throw new Error(errorMessage);
         }
 
+
+        // ----------------------------------------------------
+        // READ RESPONSE
+        // ----------------------------------------------------
 
         const data =
             await response.json();
 
 
-        renderAnswer(data);
+        // ----------------------------------------------------
+        // DISPLAY RESPONSE
+        // ----------------------------------------------------
+
+        displayAnswer(data);
 
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Ask API Error:",
+            error
+        );
 
 
-        answer.innerHTML = `
-            <div class="answer-error">
+        answerContent.innerHTML = `
+            <div class="error-box">
 
                 <strong>
                     Unable to get an answer
                 </strong>
 
-                <span>
-                    Make sure FastAPI and Obsidian
-                    are running.
-                </span>
+                <p>
+                    ${escapeHtml(error.message)}
+                </p>
 
+                <small>
+                    Please check that the backend deployment
+                    and Obsidian connection are running.
+                </small>
+
+            </div>
+        `;
+
+    } finally {
+
+        askButton.disabled = false;
+
+        askButton.innerHTML =
+            "Ask AI →";
+
+    }
+
+}
+
+
+// ============================================================
+// DISPLAY AI ANSWER
+// ============================================================
+
+function displayAnswer(data) {
+
+    let html = "";
+
+
+    // --------------------------------------------------------
+    // ANSWER
+    // --------------------------------------------------------
+
+    if (data.answer) {
+
+        html += `
+            <div class="main-answer">
+                ${formatText(data.answer)}
             </div>
         `;
 
     }
 
 
-    button.disabled = false;
+    // --------------------------------------------------------
+    // KEY POINTS
+    // --------------------------------------------------------
 
-    button.innerText = "Ask AI →";
-
-}
-
-
-/* ==========================================================
-   RENDER AI ANSWER
-========================================================== */
-
-function renderAnswer(data) {
-
-    const answer =
-        document.getElementById(
-            "answerContent"
-        );
-
-
-    const answerText =
-        data.answer ||
-        "No answer available.";
-
-
-    const keyPoints =
-        data.key_points || [];
-
-
-    const sources =
-        data.sources || [];
-
-
-    let html = `
-
-        <div class="answer-main">
-
-            ${formatAIText(answerText)}
-
-        </div>
-
-    `;
-
-
-    /* ======================================================
-       KEY POINTS
-    ====================================================== */
-
-    if (keyPoints.length > 0) {
+    if (
+        Array.isArray(data.key_points) &&
+        data.key_points.length > 0
+    ) {
 
         html += `
+            <div class="response-section">
 
-            <div class="answer-section">
-
-                <div class="answer-section-title">
+                <div class="response-section-title">
                     Key Points
                 </div>
 
+                <ul class="key-points">
+        `;
 
-                <div class="key-points">
 
-                    ${keyPoints
-                        .map(
-                            point => `
-                                <div class="key-point">
+        data.key_points.forEach(point => {
 
-                                    <span class="point-icon">
-                                        ✓
-                                    </span>
+            html += `
+                <li>
+                    ${formatText(point)}
+                </li>
+            `;
 
-                                    <span>
-                                        ${escapeHtml(point)}
-                                    </span>
+        });
 
-                                </div>
-                            `
-                        )
-                        .join("")
-                    }
 
-                </div>
+        html += `
+                </ul>
 
             </div>
-
         `;
 
     }
 
 
-    /* ======================================================
-       SOURCES
-    ====================================================== */
+    // --------------------------------------------------------
+    // SOURCES
+    // --------------------------------------------------------
 
-    if (sources.length > 0) {
+    if (
+        Array.isArray(data.sources) &&
+        data.sources.length > 0
+    ) {
 
         html += `
+            <div class="response-section">
 
-            <div class="answer-section">
-
-                <div class="answer-section-title">
+                <div class="response-section-title">
                     Sources
                 </div>
 
+                <div class="sources">
+        `;
 
-                <div class="answer-sources">
 
-                    ${sources
-                        .map(
-                            source => `
-                                <span class="answer-source">
-                                    ${escapeHtml(source)}
-                                </span>
-                            `
-                        )
-                        .join("")
-                    }
+        data.sources.forEach(source => {
 
+            html += `
+                <span class="source-tag">
+                    ${escapeHtml(source)}
+                </span>
+            `;
+
+        });
+
+
+        html += `
                 </div>
 
             </div>
-
         `;
 
     }
 
 
-    answer.innerHTML = html;
+    // --------------------------------------------------------
+    // EMPTY RESPONSE
+    // --------------------------------------------------------
 
-}
+    if (!html) {
 
+        html = `
+            <div class="error-message">
+                No response was returned.
+            </div>
+        `;
 
-/* ==========================================================
-   FORMAT AI RESPONSE
-========================================================== */
-
-function formatAIText(text) {
-
-    if (!text) {
-        return "";
     }
 
 
-    let formatted =
-        escapeHtml(text);
-
-
-    /* -----------------------------------------------
-       HEADINGS
-    ------------------------------------------------ */
-
-    formatted =
-        formatted.replace(
-            /^### (.*?)$/gm,
-            '<h4 class="ai-heading">$1</h4>'
-        );
-
-
-    formatted =
-        formatted.replace(
-            /^## (.*?)$/gm,
-            '<h3 class="ai-heading">$1</h3>'
-        );
-
-
-    formatted =
-        formatted.replace(
-            /^# (.*?)$/gm,
-            '<h2 class="ai-heading">$1</h2>'
-        );
-
-
-    /* -----------------------------------------------
-       BOLD TEXT
-    ------------------------------------------------ */
-
-    formatted =
-        formatted.replace(
-            /\*\*(.*?)\*\*/g,
-            '<strong>$1</strong>'
-        );
-
-
-    /* -----------------------------------------------
-       ITALIC TEXT
-    ------------------------------------------------ */
-
-    formatted =
-        formatted.replace(
-            /\*(.*?)\*/g,
-            '<em>$1</em>'
-        );
-
-
-    /* -----------------------------------------------
-       BULLET POINTS
-    ------------------------------------------------ */
-
-    formatted =
-        formatted.replace(
-            /^\s*[-•]\s+(.*?)$/gm,
-            `
-            <div class="ai-bullet">
-
-                <span>
-                    •
-                </span>
-
-                <span>
-                    $1
-                </span>
-
-            </div>
-            `
-        );
-
-
-    /* -----------------------------------------------
-       NUMBERED LISTS
-    ------------------------------------------------ */
-
-    formatted =
-        formatted.replace(
-            /^\s*(\d+)\.\s+(.*?)$/gm,
-            `
-            <div class="ai-numbered">
-
-                <span class="number">
-                    $1
-                </span>
-
-                <span>
-                    $2
-                </span>
-
-            </div>
-            `
-        );
-
-
-    /* -----------------------------------------------
-       HORIZONTAL LINES
-    ------------------------------------------------ */
-
-    formatted =
-        formatted.replace(
-            /^---$/gm,
-            '<div class="ai-divider"></div>'
-        );
-
-
-    /* -----------------------------------------------
-       PARAGRAPH SPACING
-    ------------------------------------------------ */
-
-    formatted =
-        formatted.replace(
-            /\n{2,}/g,
-            '<div class="ai-space"></div>'
-        );
-
-
-    /* -----------------------------------------------
-       REMAINING LINE BREAKS
-    ------------------------------------------------ */
-
-    formatted =
-        formatted.replace(
-            /\n/g,
-            "<br>"
-        );
-
-
-    return formatted;
+    answerContent.innerHTML =
+        html;
 
 }
 
 
-/* ==========================================================
-   INTERNSHIP HEALTH CHECK
-========================================================== */
+// ============================================================
+// HEALTH CHECK
+// ============================================================
 
 async function healthCheck() {
 
-    const empty =
-        document.getElementById(
-            "healthEmpty"
-        );
+    const healthButton =
+        document.getElementById("healthButton");
+
+    const healthEmpty =
+        document.getElementById("healthEmpty");
+
+    const healthContent =
+        document.getElementById("healthContent");
+
+    const healthStatus =
+        document.getElementById("healthStatus");
 
 
-    const content =
-        document.getElementById(
-            "healthContent"
-        );
+    healthButton.disabled = true;
 
-
-    const status =
-        document.getElementById(
-            "healthStatus"
-        );
-
-
-    const button =
-        document.getElementById(
-            "healthButton"
-        );
-
-
-    status.innerText =
+    healthButton.innerHTML =
         "Analyzing...";
 
 
-    button.disabled = true;
-
-    button.innerText =
-        "Analyzing...";
-
-
-    empty.innerHTML = `
-
-        <div class="empty-symbol">
-            ✦
-        </div>
-
-
-        <h3>
-            Analyzing internship
-        </h3>
-
-
-        <p>
-            Claude is reviewing your internship
-            knowledge and identifying projects,
-            accomplishments, challenges, and
-            next steps.
-        </p>
-
-    `;
+    healthStatus.innerHTML =
+        "Analyzing";
 
 
     try {
 
-        const response =
-            await fetch(
-                `${API_BASE_URL}/health-check`
-            );
+        const response = await fetch(
+            `${API_BASE_URL}/health-check`,
+            {
+                method: "GET",
+
+                headers: {
+                    "Accept": "application/json"
+                }
+            }
+        );
 
 
         if (!response.ok) {
 
-            throw new Error(
-                "Health check failed"
-            );
+            let errorMessage =
+                `Server returned ${response.status}`;
 
+            try {
+
+                const errorData =
+                    await response.json();
+
+                if (errorData.detail) {
+                    errorMessage =
+                        errorData.detail;
+                }
+
+            } catch (error) {}
+
+            throw new Error(errorMessage);
         }
 
 
@@ -502,168 +404,111 @@ async function healthCheck() {
             await response.json();
 
 
-        if (data.error) {
-
-            throw new Error(
-                data.error
-            );
-
-        }
+        displayHealthData(data);
 
 
-        renderHealth(data);
-
-
-        empty.style.display =
+        healthEmpty.style.display =
             "none";
 
-
-        content.style.display =
+        healthContent.style.display =
             "block";
 
-
-        status.innerText =
-            "Updated just now";
+        healthStatus.innerHTML =
+            "Analyzed";
 
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Health Check Error:",
+            error
+        );
 
 
-        empty.innerHTML = `
+        healthStatus.innerHTML =
+            "Error";
+
+
+        healthEmpty.innerHTML = `
 
             <div class="empty-symbol">
                 !
             </div>
 
-
             <h3>
                 Analysis failed
             </h3>
 
-
             <p>
-                Unable to analyze the internship.
-                Make sure FastAPI and Obsidian
-                are running.
+                ${escapeHtml(error.message)}
             </p>
+
+            <button
+                class="health-button"
+                onclick="healthCheck()"
+            >
+                Try Again
+            </button>
 
         `;
 
+    } finally {
 
-        status.innerText =
-            "Unable to analyze";
+        healthButton.disabled = false;
+
+        healthButton.innerHTML =
+            "Run AI Analysis";
 
     }
-
-
-    button.disabled = false;
-
-    button.innerText =
-        "Run AI Analysis";
 
 }
 
 
-/* ==========================================================
-   RENDER HEALTH
-========================================================== */
+// ============================================================
+// DISPLAY HEALTH DATA
+// ============================================================
 
-function renderHealth(data) {
+function displayHealthData(data) {
 
     const summary =
         data.summary || {};
 
 
-    /* ======================================================
-       SUPPORT CURRENT / NEW DATA
-    ====================================================== */
+    // --------------------------------------------------------
+    // COUNTS
+    // --------------------------------------------------------
 
-    const projectCount =
-        summary.project_count ??
-        summary.high_risk_count ??
-        0;
-
-
-    const challengeCount =
-        summary.challenge_count ??
-        summary.attention_count ??
-        0;
+    document.getElementById("highCount")
+        .textContent =
+        summary.project_count || 0;
 
 
-    const technologyCount =
-        summary.technology_count ??
-        summary.on_track_count ??
-        0;
+    document.getElementById("attentionCount")
+        .textContent =
+        summary.challenge_count || 0;
 
 
-    /* ======================================================
-       TITLE
-    ====================================================== */
-
-    document.getElementById(
-        "healthTitle"
-    ).innerText =
-        summary.status ||
-        "Internship Progress";
+    document.getElementById("trackCount")
+        .textContent =
+        summary.technology_count || 0;
 
 
-    /* ======================================================
-       COUNTS
-    ====================================================== */
+    // --------------------------------------------------------
+    // STATUS
+    // --------------------------------------------------------
 
-    document.getElementById(
-        "highCount"
-    ).innerText =
-        projectCount;
+    const status =
+        summary.status || "Analyzed";
 
 
-    document.getElementById(
-        "attentionCount"
-    ).innerText =
-        challengeCount;
+    document.getElementById("healthTitle")
+        .textContent =
+        status;
 
 
-    document.getElementById(
-        "trackCount"
-    ).innerText =
-        technologyCount;
-
-
-    /* ======================================================
-       HEALTH INDICATOR
-    ====================================================== */
-
-    const indicator =
-        document.getElementById(
-            "healthIndicator"
-        );
-
-
-    if (
-        summary.status &&
-        summary.status
-            .toLowerCase()
-            .includes("attention")
-    ) {
-
-        indicator.style.background =
-            "#c87500";
-
-    }
-
-    else {
-
-        indicator.style.background =
-            "#18845b";
-
-    }
-
-
-    /* ======================================================
-       FINDINGS
-    ====================================================== */
+    // --------------------------------------------------------
+    // FINDINGS
+    // --------------------------------------------------------
 
     const findings =
         document.getElementById(
@@ -671,490 +516,174 @@ function renderHealth(data) {
         );
 
 
-    findings.innerHTML = "";
+    let findingsHtml = "";
 
-
-    /* ======================================================
-       PROJECTS
-    ====================================================== */
 
     if (
-        data.projects &&
+        summary.overview &&
+        summary.overview.trim()
+    ) {
+
+        findingsHtml += `
+
+            <div class="finding-card">
+
+                <div class="finding-title">
+                    Overview
+                </div>
+
+                <p>
+                    ${formatText(summary.overview)}
+                </p>
+
+            </div>
+
+        `;
+
+    }
+
+
+    // --------------------------------------------------------
+    // PROJECTS
+    // --------------------------------------------------------
+
+    if (
+        Array.isArray(data.projects) &&
         data.projects.length > 0
     ) {
 
-        findings.innerHTML += `
-
-            <div class="section-label">
-                Projects
-            </div>
-
-        `;
-
-
-        data.projects.forEach(
-            item => {
-
-                findings.innerHTML +=
-                    createInternshipCard(
-                        item,
-                        "project"
-                    );
-
-            }
+        findingsHtml += createListSection(
+            "Projects",
+            data.projects
         );
 
     }
 
 
-    /* ======================================================
-       ACCOMPLISHMENTS
-    ====================================================== */
+    // --------------------------------------------------------
+    // ACCOMPLISHMENTS
+    // --------------------------------------------------------
 
     if (
-        data.accomplishments &&
+        Array.isArray(data.accomplishments) &&
         data.accomplishments.length > 0
     ) {
 
-        findings.innerHTML += `
-
-            <div class="section-label">
-                Accomplishments
-            </div>
-
-        `;
-
-
-        data.accomplishments.forEach(
-            item => {
-
-                findings.innerHTML +=
-                    createInternshipCard(
-                        item,
-                        "accomplishment"
-                    );
-
-            }
+        findingsHtml += createListSection(
+            "Accomplishments",
+            data.accomplishments
         );
 
     }
 
 
-    /* ======================================================
-       CHALLENGES
-    ====================================================== */
+    // --------------------------------------------------------
+    // CHALLENGES
+    // --------------------------------------------------------
 
     if (
-        data.challenges &&
+        Array.isArray(data.challenges) &&
         data.challenges.length > 0
     ) {
 
-        findings.innerHTML += `
-
-            <div class="section-label">
-                Challenges
-            </div>
-
-        `;
-
-
-        data.challenges.forEach(
-            item => {
-
-                findings.innerHTML +=
-                    createInternshipCard(
-                        item,
-                        "challenge"
-                    );
-
-            }
+        findingsHtml += createListSection(
+            "Challenges",
+            data.challenges
         );
 
     }
 
 
-    /* ======================================================
-       LEARNING
-    ====================================================== */
+    // --------------------------------------------------------
+    // LEARNING
+    // --------------------------------------------------------
 
     if (
-        data.learning &&
+        Array.isArray(data.learning) &&
         data.learning.length > 0
     ) {
 
-        findings.innerHTML += `
-
-            <div class="section-label">
-                Learning & Development
-            </div>
-
-        `;
-
-
-        data.learning.forEach(
-            item => {
-
-                findings.innerHTML +=
-                    createInternshipCard(
-                        item,
-                        "learning"
-                    );
-
-            }
+        findingsHtml += createListSection(
+            "Learning",
+            data.learning
         );
 
     }
 
 
-    /* ======================================================
-       CURRENT FOCUS
-    ====================================================== */
-
-    if (
-        data.current_focus &&
-        data.current_focus.length > 0
-    ) {
-
-        findings.innerHTML += `
-
-            <div class="section-label">
-                Current Focus
-            </div>
-
-        `;
+    findings.innerHTML =
+        findingsHtml;
 
 
-        data.current_focus.forEach(
-            item => {
+    // --------------------------------------------------------
+    // NEXT STEPS
+    // --------------------------------------------------------
 
-                findings.innerHTML +=
-                    createInternshipCard(
-                        item,
-                        "focus"
-                    );
-
-            }
-        );
-
-    }
-
-
-    /* ======================================================
-       RECOMMENDED ACTIONS / NEXT STEPS
-    ====================================================== */
-
-    const actions =
+    const recommendedActions =
         document.getElementById(
             "recommendedActions"
         );
 
 
-    actions.innerHTML = "";
-
-
     if (
-        data.next_steps &&
+        Array.isArray(data.next_steps) &&
         data.next_steps.length > 0
     ) {
 
-        data.next_steps.forEach(
-            (item, index) => {
-
-                const action =
-                    typeof item === "string"
-                    ? item
-                    : item.action ||
-                      item.title ||
-                      "";
-
-
-                const reason =
-                    typeof item === "string"
-                    ? ""
-                    : item.reason ||
-                      item.description ||
-                      "";
-
-
-                actions.innerHTML += `
-
-                    <div class="action">
-
-                        <div class="action-number">
-                            ${index + 1}
+        recommendedActions.innerHTML =
+            data.next_steps
+                .map(
+                    step => `
+                        <div class="action-item">
+                            ${formatText(step)}
                         </div>
+                    `
+                )
+                .join("");
 
+    } else {
 
-                        <div>
-
-                            <div class="action-title">
-                                ${escapeHtml(action)}
-                            </div>
-
-
-                            ${
-                                reason
-                                ? `
-                                    <div class="action-reason">
-                                        ${escapeHtml(reason)}
-                                    </div>
-                                `
-                                : ""
-                            }
-
-                        </div>
-
-                    </div>
-
-                `;
-
-            }
-        );
-
-    }
-
-    else if (
-        data.recommended_actions &&
-        data.recommended_actions.length > 0
-    ) {
-
-        data.recommended_actions.forEach(
-            item => {
-
-                actions.innerHTML += `
-
-                    <div class="action">
-
-                        <div class="action-number">
-
-                            ${escapeHtml(
-                                String(
-                                    item.priority
-                                )
-                            )}
-
-                        </div>
-
-
-                        <div>
-
-                            <div class="action-title">
-
-                                ${escapeHtml(
-                                    item.action
-                                )}
-
-                            </div>
-
-
-                            <div class="action-reason">
-
-                                ${escapeHtml(
-                                    item.reason || ""
-                                )}
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                `;
-
-            }
-        );
-
-    }
-
-    else {
-
-        actions.innerHTML = `
-
-            <div class="action-reason">
-                No additional next steps available.
-            </div>
-
-        `;
+        recommendedActions.innerHTML =
+            `<div class="no-data">
+                No documented next steps.
+            </div>`;
 
     }
 
 }
 
 
-/* ==========================================================
-   INTERNSHIP CARD
-========================================================== */
+// ============================================================
+// CREATE LIST SECTION
+// ============================================================
 
-function createInternshipCard(
-    item,
-    type
+function createListSection(
+    title,
+    items
 ) {
-
-    const id =
-        "finding-" +
-        Math.random()
-            .toString(36)
-            .substring(2);
-
-
-    const title =
-        typeof item === "string"
-        ? item
-        : item.title || "";
-
-
-    const description =
-        typeof item === "string"
-        ? ""
-        : item.description ||
-          item.details ||
-          item.issue ||
-          "";
-
-
-    const reason =
-        typeof item === "string"
-        ? ""
-        : item.reason ||
-          item.why_it_matters ||
-          "";
-
-
-    const sources =
-        typeof item === "object"
-        ? item.sources || []
-        : [];
-
 
     return `
 
-        <div class="finding">
+        <div class="finding-card">
 
-
-            <div
-                class="finding-header"
-                onclick="toggleFinding('${id}')"
-            >
-
-                <div class="finding-main">
-
-                    <span
-                        class="finding-dot ${type}"
-                    ></span>
-
-
-                    <span class="finding-title">
-
-                        ${escapeHtml(title)}
-
-                    </span>
-
-                </div>
-
-
-                <span
-                    id="${id}-arrow"
-                    class="finding-arrow"
-                >
-                    +
-                </span>
-
+            <div class="finding-title">
+                ${escapeHtml(title)}
             </div>
 
+            <ul class="finding-list">
 
-
-            <div
-                id="${id}"
-                class="finding-body"
-            >
-
-
-                ${
-                    description
-                    ? `
-                        <div class="finding-field">
-
-                            <div class="finding-label">
-                                Details
-                            </div>
-
-
-                            <p class="finding-text">
-
-                                ${escapeHtml(
-                                    description
-                                )}
-
-                            </p>
-
-                        </div>
-                    `
-                    : ""
+                ${items
+                    .map(
+                        item => `
+                            <li>
+                                ${formatText(item)}
+                            </li>
+                        `
+                    )
+                    .join("")
                 }
 
-
-
-                ${
-                    reason
-                    ? `
-                        <div class="finding-field">
-
-                            <div class="finding-label">
-                                Context
-                            </div>
-
-
-                            <p class="finding-text">
-
-                                ${escapeHtml(
-                                    reason
-                                )}
-
-                            </p>
-
-                        </div>
-                    `
-                    : ""
-                }
-
-
-
-                ${
-                    sources.length > 0
-                    ? `
-                        <div class="finding-field">
-
-                            <div class="finding-label">
-                                Sources
-                            </div>
-
-
-                            <div class="sources">
-
-                                ${
-                                    sources
-                                        .map(
-                                            source => `
-                                                <span class="source">
-
-                                                    ${escapeHtml(
-                                                        source
-                                                    )}
-
-                                                </span>
-                                            `
-                                        )
-                                        .join("")
-                                }
-
-                            </div>
-
-                        </div>
-                    `
-                    : ""
-                }
-
-            </div>
+            </ul>
 
         </div>
 
@@ -1163,63 +692,49 @@ function createInternshipCard(
 }
 
 
-/* ==========================================================
-   EXPAND / COLLAPSE
-========================================================== */
+// ============================================================
+// TEXT FORMATTING
+// ============================================================
 
-function toggleFinding(id) {
+function formatText(text) {
 
-    const body =
-        document.getElementById(id);
-
-
-    const arrow =
-        document.getElementById(
-            id + "-arrow"
-        );
-
-
-    if (
-        body.style.display === "block"
-    ) {
-
-        body.style.display =
-            "none";
-
-        arrow.innerText =
-            "+";
-
+    if (text === null || text === undefined) {
+        return "";
     }
 
-    else {
 
-        body.style.display =
-            "block";
+    return escapeHtml(
+        String(text)
+    )
+    .replace(/\n/g, "<br>");
+}
 
-        arrow.innerText =
-            "−";
 
-    }
+// ============================================================
+// HTML ESCAPE
+// ============================================================
+
+function escapeHtml(text) {
+
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
 }
 
 
-/* ==========================================================
-   HTML ESCAPE
-========================================================== */
+// ============================================================
+// PAGE LOAD
+// ============================================================
 
-function escapeHtml(value) {
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
 
-    const div =
-        document.createElement(
-            "div"
-        );
+        questionInput.focus();
 
-
-    div.textContent =
-        value ?? "";
-
-
-    return div.innerHTML;
-
-}
+    }
+);
