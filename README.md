@@ -1,137 +1,413 @@
 # 🤖 AI Project Assistant
 
-A simple AI assistant that works with **Obsidian** and a local backend.
-
-## 📌 Requirements
-
-* 🐍 Python
-* 📝 Obsidian
-* ☁️ Cloudflare Tunnel
-* 💻 AI Project Assistant
+An AI-powered project assistant that works with **Obsidian** and a local backend.
+It uses your Obsidian project knowledge as context for AI-assisted interactions.
 
 ---
 
-## 🚀 How to Run
+## ✨ Features
 
-### 1️⃣ Open the Project
+* 🤖 AI-powered project assistance
+* 📝 Works with Obsidian
+* 📚 Uses project notes and knowledge as context
+* 💻 Runs locally
+* ☁️ Cloudflare Tunnel support for external access
+* 🔗 Local backend API
 
-Open **PowerShell** and go to the project folder:
+---
+
+## 🛠️ Requirements
+
+Before starting, make sure you have:
+
+* 🐍 **Python**
+* 📝 **Obsidian**
+* ☁️ **Cloudflare Tunnel**
+* 💻 **Git**
+* 🔑 Required API keys/environment variables
+
+---
+
+# 🚀 Setup
+
+## 1️⃣ Clone the Repository
+
+Open **PowerShell** and run:
 
 ```powershell
-cd path\to\AI-Project-Assistant
+git clone <YOUR-GITHUB-REPOSITORY-URL>
+```
+
+Go into the project folder:
+
+```powershell
+cd AI-Project-Assistant
 ```
 
 ---
 
-### 2️⃣ Start the Backend
+## 2️⃣ Create a Python Virtual Environment
 
-Run the backend application:
+Create a virtual environment:
+
+```powershell
+python -m venv venv
+```
+
+Activate it:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+If activation is successful, you should see something similar to:
+
+```text
+(venv)
+```
+
+at the beginning of your terminal.
+
+---
+
+## 3️⃣ Install Dependencies
+
+Install the required Python packages:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Wait until the installation is complete.
+
+---
+
+## 4️⃣ Configure Environment Variables
+
+If the project contains a `.env.example` file, create your `.env` file:
+
+```powershell
+copy .env.example .env
+```
+
+Open `.env` and add the required API keys/configuration.
+
+Example:
+
+```env
+OPENAI_API_KEY=your_api_key_here
+```
+
+⚠️ **Never commit your `.env` file to GitHub.**
+
+Make sure `.env` is included in `.gitignore`.
+
+---
+
+# ▶️ Running the Project
+
+## 5️⃣ Start the Backend
+
+Make sure your virtual environment is activated:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+Start the backend using the project's backend entry file:
 
 ```powershell
 python <backend-file>.py
 ```
 
-✅ Backend should run on:
+The backend should run on:
 
 ```text
 http://127.0.0.1:27123
 ```
 
-💡 **Keep this terminal open.**
+✅ If the backend starts successfully, **keep this PowerShell window open**.
 
 ---
 
-### 3️⃣ Open Obsidian
+## 6️⃣ Open Obsidian
 
-📝 Open **Obsidian**.
+Open **Obsidian**.
 
-➡️ Open the vault used by the project.
+Then:
 
-💡 **Keep Obsidian open while using the assistant.**
+1. 📝 Open your project vault.
+2. 📂 Make sure the required project notes/files are available.
+3. 🔄 Keep Obsidian running while using the assistant.
 
 ---
 
-### 4️⃣ Start Cloudflare Tunnel
+# ☁️ Cloudflare Tunnel
 
-☁️ Open a **new PowerShell window** and run:
+## 7️⃣ Start Cloudflare Tunnel
+
+Open a **new PowerShell window**.
+
+Run:
 
 ```powershell
 & "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:27123
 ```
 
-You will get a URL similar to:
+If everything is working, Cloudflare will provide a URL similar to:
 
 ```text
 https://xxxxx.trycloudflare.com
 ```
 
-📋 Copy this URL when the project needs a public backend URL.
+Example:
 
-💡 **Keep this terminal open.**
+```text
+https://abc123.trycloudflare.com
+```
+
+📋 Copy the generated URL.
+
+This URL can be used when the application requires an externally accessible backend.
+
+⚠️ **Keep the Cloudflare terminal open while the tunnel is being used.**
 
 ---
 
-## 🔄 Running Setup
+# 🔄 Complete Running Setup
 
-Once everything is running:
+When everything is running, the setup looks like this:
 
 ```text
 📝 Obsidian
-     ↓
+      │
+      ▼
 🤖 AI Project Assistant
-     ↓
+      │
+      ▼
 💻 Local Backend
-     ↓
+      │
+      │  Port 27123
+      ▼
 ☁️ Cloudflare Tunnel
-     ↓
+      │
+      ▼
 🌐 Public URL
 ```
 
 ---
 
-## 🧪 Quick Check
+# 🧪 Testing
 
-Before using the assistant, make sure:
+## 8️⃣ Check the Backend
 
-* ✅ Backend is running
-* ✅ Backend is using port `27123`
-* ✅ Obsidian is open
-* ✅ Cloudflare Tunnel is running
-* ✅ Cloudflare URL is available
-
----
-
-## 🛑 How to Stop
-
-When you are finished:
-
-1. Stop the **Backend** → `Ctrl + C`
-2. Stop **Cloudflare Tunnel** → `Ctrl + C`
-3. Close **Obsidian** → Optional
-
-⚠️ **Do not stop Cloudflare Tunnel while you are using the public URL.**
-
----
-
-## 🔐 Important
-
-* 🔑 Never commit API keys or passwords.
-* 🚫 Do not commit `.env` files containing secrets.
-* ☁️ The `trycloudflare.com` URL is temporary.
-* 🔄 Restarting the tunnel may generate a new URL.
-
----
-
-## ⭐ Quick Start
+Open your browser and go to:
 
 ```text
-1️⃣ Start Backend
-       ↓
-2️⃣ Open Obsidian
-       ↓
-3️⃣ Start Cloudflare Tunnel
-       ↓
-4️⃣ Copy Cloudflare URL
-       ↓
-5️⃣ Use AI Project Assistant 🚀
+http://127.0.0.1:27123
 ```
+
+If the application has a specific health endpoint, use:
+
+```text
+http://127.0.0.1:27123/<health-endpoint>
+```
+
+The backend should respond without a connection error.
+
+---
+
+## 9️⃣ Test the AI Assistant
+
+After starting:
+
+* ✅ Backend
+* ✅ Obsidian
+* ✅ Cloudflare Tunnel (if required)
+
+Open the AI Project Assistant and test a simple request.
+
+For example:
+
+```text
+What information is available in my project?
+```
+
+Verify that the assistant can access the expected project context.
+
+---
+
+# 🛑 Stopping the Project
+
+When finished, stop the services in the following order.
+
+### Backend
+
+Go to the backend PowerShell window and press:
+
+```text
+Ctrl + C
+```
+
+### Cloudflare Tunnel
+
+Go to the Cloudflare PowerShell window and press:
+
+```text
+Ctrl + C
+```
+
+### Obsidian
+
+Close Obsidian if you no longer need it.
+
+---
+
+# ⚠️ Important Notes
+
+### 🔑 API Keys
+
+Never upload API keys, passwords, or tokens to GitHub.
+
+Do not commit:
+
+```text
+.env
+```
+
+Use `.gitignore` to protect sensitive files.
+
+### ☁️ Cloudflare URL
+
+The `trycloudflare.com` URL generated by the quick tunnel is temporary.
+
+If the tunnel is restarted, a different URL may be generated.
+
+### 💻 Keep Terminals Open
+
+While using the application:
+
+```text
+Backend Terminal       → Keep Open
+Cloudflare Terminal    → Keep Open
+Obsidian               → Keep Open
+```
+
+---
+
+# 🐛 Troubleshooting
+
+## Backend does not start
+
+Check that:
+
+* Python is installed.
+* The virtual environment is activated.
+* Dependencies are installed.
+* `.env` contains the required configuration.
+* Port `27123` is not already being used.
+
+Try:
+
+```powershell
+pip install -r requirements.txt
+```
+
+and start the backend again.
+
+---
+
+## Cloudflare Tunnel does not connect
+
+Make sure the backend is already running on:
+
+```text
+http://127.0.0.1:27123
+```
+
+Then start Cloudflare again:
+
+```powershell
+& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:27123
+```
+
+---
+
+## Obsidian data is not available
+
+Check that:
+
+* 📝 Obsidian is open.
+* 📂 The correct vault is open.
+* 📄 Required project notes are present.
+* 🔄 The assistant is configured to use the correct vault/project.
+
+---
+
+# 📁 Project Structure
+
+A typical structure looks like:
+
+```text
+AI-Project-Assistant/
+│
+├── backend/
+│   ├── ...
+│
+├── ...
+│
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+> The exact structure may vary depending on the current implementation.
+
+---
+
+# ⭐ Quick Start
+
+For future runs, you only need to remember:
+
+```text
+1️⃣ Open PowerShell
+       ↓
+2️⃣ Go to project folder
+       ↓
+3️⃣ Activate virtual environment
+       ↓
+4️⃣ Start backend
+       ↓
+5️⃣ Open Obsidian
+       ↓
+6️⃣ Open a new PowerShell
+       ↓
+7️⃣ Start Cloudflare Tunnel
+       ↓
+8️⃣ Copy the Cloudflare URL
+       ↓
+9️⃣ Use the AI Project Assistant 🚀
+```
+
+---
+
+## 📌 Local Backend
+
+```text
+http://127.0.0.1:27123
+```
+
+## ☁️ Cloudflare
+
+```text
+https://xxxxx.trycloudflare.com
+```
+
+---
+
+## 👤 Project
+
+**AI Project Assistant**
+
+Built for AI-assisted project knowledge management using **Obsidian + AI + a local backend**.
