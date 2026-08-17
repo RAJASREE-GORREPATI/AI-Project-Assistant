@@ -1,57 +1,41 @@
 // ============================================================
-// AI INTERNSHIP MEMORY ASSISTANT
-// FRONTEND JAVASCRIPT
+// CONFIGURATION
 // ============================================================
 
-
-// ============================================================
-// BACKEND URL
-// ============================================================
-
-const API_BASE_URL =
-    "https://ai-project-assistant-kappa.vercel.app";
+const API_BASE = window.location.origin;
 
 
 // ============================================================
-// ELEMENTS
+// DOM HELPERS
 // ============================================================
 
-const questionInput =
-    document.getElementById("question");
-
-const askButton =
-    document.getElementById("askButton");
-
-const answerWrapper =
-    document.getElementById("answerWrapper");
-
-const answerContent =
-    document.getElementById("answerContent");
-
-
-// ============================================================
-// ENTER KEY
-// ============================================================
-
-function handleEnter(event) {
-
-    if (event.key === "Enter") {
-        askQuestion();
-    }
-
+function getElement(id) {
+    return document.getElementById(id);
 }
 
 
-// ============================================================
-// QUICK QUESTIONS
-// ============================================================
+function escapeHtml(value) {
 
-function quickAsk(question) {
+    if (value === null || value === undefined) {
+        return "";
+    }
 
-    questionInput.value = question;
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
-    askQuestion();
 
+function arrayValue(value) {
+
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value;
 }
 
 
@@ -61,217 +45,129 @@ function quickAsk(question) {
 
 async function askQuestion() {
 
-    const question =
-        questionInput.value.trim();
+    const input = getElement("question");
 
-
-    // --------------------------------------------------------
-    // VALIDATION
-    // --------------------------------------------------------
-
-    if (!question) {
-
-        answerWrapper.classList.add("visible");
-
-        answerContent.innerHTML = `
-            <div class="error-message">
-                Please enter a question.
-            </div>
-        `;
-
+    if (!input) {
+        console.error("Question input not found.");
         return;
     }
 
+    const question = input.value.trim();
 
-    // --------------------------------------------------------
-    // LOADING STATE
-    // --------------------------------------------------------
+    if (!question) {
+        showAskError("Please enter a question.");
+        return;
+    }
 
-    askButton.disabled = true;
-
-    askButton.innerHTML =
-        "Thinking...";
-
-
-    answerWrapper.classList.add("visible");
-
-
-    answerContent.innerHTML = `
-        <div class="loading">
-            <div class="loading-spinner"></div>
-
-            <span>
-                Searching your internship knowledge...
-            </span>
-        </div>
-    `;
-
+    setAskLoading(true);
 
     try {
 
-        // ----------------------------------------------------
-        // API REQUEST
-        // ----------------------------------------------------
-
         const response = await fetch(
-            `${API_BASE_URL}/ask`,
+            `${API_BASE}/ask`,
             {
                 method: "POST",
-
                 headers: {
                     "Content-Type": "application/json",
                     "Accept": "application/json"
                 },
-
                 body: JSON.stringify({
                     question: question
                 })
             }
         );
 
-
-        // ----------------------------------------------------
-        // HANDLE HTTP ERRORS
-        // ----------------------------------------------------
+        const data = await response.json();
 
         if (!response.ok) {
 
-            let errorMessage =
-                `Server returned ${response.status}`;
-
-            try {
-
-                const errorData =
-                    await response.json();
-
-                if (errorData.detail) {
-                    errorMessage =
-                        errorData.detail;
-                }
-
-            } catch (error) {
-                // Ignore JSON parsing error
-            }
-
-            throw new Error(errorMessage);
+            throw new Error(
+                data.detail ||
+                data.message ||
+                "Unable to process the question."
+            );
         }
 
-
-        // ----------------------------------------------------
-        // READ RESPONSE
-        // ----------------------------------------------------
-
-        const data =
-            await response.json();
-
-
-        // ----------------------------------------------------
-        // DISPLAY RESPONSE
-        // ----------------------------------------------------
-
-        displayAnswer(data);
-
+        displayAskResponse(data);
 
     } catch (error) {
 
-        console.error(
-            "Ask API Error:",
-            error
+        console.error("Ask error:", error);
+
+        showAskError(
+            error.message ||
+            "Something went wrong while asking the AI."
         );
-
-
-        answerContent.innerHTML = `
-            <div class="error-box">
-
-                <strong>
-                    Unable to get an answer
-                </strong>
-
-                <p>
-                    ${escapeHtml(error.message)}
-                </p>
-
-                <small>
-                    Please check that the backend deployment
-                    and Obsidian connection are running.
-                </small>
-
-            </div>
-        `;
 
     } finally {
 
-        askButton.disabled = false;
-
-        askButton.innerHTML =
-            "Ask AI →";
-
+        setAskLoading(false);
     }
-
 }
 
 
 // ============================================================
-// DISPLAY AI ANSWER
+// DISPLAY ASK RESPONSE
 // ============================================================
 
-function displayAnswer(data) {
+function displayAskResponse(data) {
 
-    let html = "";
+    const container = getElement("response");
 
-
-    // --------------------------------------------------------
-    // ANSWER
-    // --------------------------------------------------------
-
-    if (data.answer) {
-
-        html += `
-            <div class="main-answer">
-                ${formatText(data.answer)}
-            </div>
-        `;
-
+    if (!container) {
+        console.error("Response container not found.");
+        return;
     }
+
+    const answer = escapeHtml(
+        data.answer || "No answer returned."
+    );
+
+    const keyPoints = arrayValue(
+        data.key_points
+    );
+
+    const sources = arrayValue(
+        data.sources
+    );
+
+    let html = `
+        <div class="response-card">
+
+            <div class="response-header">
+                <h2>AI Response</h2>
+                <span>INTERNSHIP KNOWLEDGE</span>
+            </div>
+
+            <div class="answer">
+                ${answer}
+            </div>
+    `;
 
 
     // --------------------------------------------------------
     // KEY POINTS
     // --------------------------------------------------------
 
-    if (
-        Array.isArray(data.key_points) &&
-        data.key_points.length > 0
-    ) {
+    if (keyPoints.length > 0) {
 
         html += `
             <div class="response-section">
-
-                <div class="response-section-title">
-                    Key Points
-                </div>
-
-                <ul class="key-points">
+                <h3>KEY POINTS</h3>
+                <ul>
         `;
 
-
-        data.key_points.forEach(point => {
+        keyPoints.forEach(point => {
 
             html += `
-                <li>
-                    ${formatText(point)}
-                </li>
+                <li>${escapeHtml(point)}</li>
             `;
-
         });
-
 
         html += `
                 </ul>
-
             </div>
         `;
-
     }
 
 
@@ -279,60 +175,80 @@ function displayAnswer(data) {
     // SOURCES
     // --------------------------------------------------------
 
-    if (
-        Array.isArray(data.sources) &&
-        data.sources.length > 0
-    ) {
+    if (sources.length > 0) {
 
         html += `
             <div class="response-section">
-
-                <div class="response-section-title">
-                    Sources
-                </div>
-
-                <div class="sources">
+                <h3>SOURCES</h3>
+                <div class="source-list">
         `;
 
-
-        data.sources.forEach(source => {
+        sources.forEach(source => {
 
             html += `
                 <span class="source-tag">
                     ${escapeHtml(source)}
                 </span>
             `;
-
         });
-
 
         html += `
                 </div>
-
             </div>
         `;
-
     }
 
 
-    // --------------------------------------------------------
-    // EMPTY RESPONSE
-    // --------------------------------------------------------
+    html += `
+        </div>
+    `;
 
-    if (!html) {
+    container.innerHTML = html;
+}
 
-        html = `
-            <div class="error-message">
-                No response was returned.
-            </div>
-        `;
 
+// ============================================================
+// ASK ERROR
+// ============================================================
+
+function showAskError(message) {
+
+    const container = getElement("response");
+
+    if (!container) {
+        return;
     }
 
+    container.innerHTML = `
+        <div class="error-card">
+            <h3>Something went wrong</h3>
+            <p>${escapeHtml(message)}</p>
+        </div>
+    `;
+}
 
-    answerContent.innerHTML =
-        html;
 
+// ============================================================
+// ASK LOADING
+// ============================================================
+
+function setAskLoading(isLoading) {
+
+    const button = getElement("askButton");
+    const input = getElement("question");
+
+    if (button) {
+
+        button.disabled = isLoading;
+
+        button.textContent = isLoading
+            ? "Thinking..."
+            : "Ask AI";
+    }
+
+    if (input) {
+        input.disabled = isLoading;
+    }
 }
 
 
@@ -340,401 +256,789 @@ function displayAnswer(data) {
 // HEALTH CHECK
 // ============================================================
 
-async function healthCheck() {
+async function loadHealthCheck() {
 
-    const healthButton =
-        document.getElementById("healthButton");
+    const container = getElement(
+        "health-container"
+    );
 
-    const healthEmpty =
-        document.getElementById("healthEmpty");
+    if (!container) {
+        console.warn(
+            "health-container not found."
+        );
+        return;
+    }
 
-    const healthContent =
-        document.getElementById("healthContent");
-
-    const healthStatus =
-        document.getElementById("healthStatus");
-
-
-    healthButton.disabled = true;
-
-    healthButton.innerHTML =
-        "Analyzing...";
-
-
-    healthStatus.innerHTML =
-        "Analyzing";
-
+    showHealthLoading(container);
 
     try {
 
         const response = await fetch(
-            `${API_BASE_URL}/health-check`,
+            `${API_BASE}/health-check`,
             {
                 method: "GET",
-
                 headers: {
                     "Accept": "application/json"
-                }
+                },
+                cache: "no-store"
             }
         );
 
+        const data = await response.json();
 
         if (!response.ok) {
 
-            let errorMessage =
-                `Server returned ${response.status}`;
-
-            try {
-
-                const errorData =
-                    await response.json();
-
-                if (errorData.detail) {
-                    errorMessage =
-                        errorData.detail;
-                }
-
-            } catch (error) {}
-
-            throw new Error(errorMessage);
+            throw new Error(
+                data.detail ||
+                data.message ||
+                "Health check failed."
+            );
         }
 
 
-        const data =
-            await response.json();
+        // ----------------------------------------------------
+        // BACKEND ERROR
+        // ----------------------------------------------------
+
+        if (data.error) {
+
+            showHealthError(
+                container,
+                data.message || data.error
+            );
+
+            return;
+        }
 
 
-        displayHealthData(data);
+        // ----------------------------------------------------
+        // DISPLAY
+        // ----------------------------------------------------
 
-
-        healthEmpty.style.display =
-            "none";
-
-        healthContent.style.display =
-            "block";
-
-        healthStatus.innerHTML =
-            "Analyzed";
-
+        displayHealthCheck(
+            container,
+            data
+        );
 
     } catch (error) {
 
         console.error(
-            "Health Check Error:",
+            "Health check error:",
             error
         );
 
+        showHealthError(
+            container,
+            error.message ||
+            "Unable to load internship analysis."
+        );
+    }
+}
 
-        healthStatus.innerHTML =
-            "Error";
+
+// ============================================================
+// HEALTH LOADING
+// ============================================================
+
+function showHealthLoading(container) {
+
+    container.innerHTML = `
+        <div class="loading-card">
+            <div class="spinner"></div>
+            <p>Analyzing your internship knowledge...</p>
+        </div>
+    `;
+}
 
 
-        healthEmpty.innerHTML = `
+// ============================================================
+// HEALTH ERROR
+// ============================================================
 
-            <div class="empty-symbol">
-                !
-            </div>
+function showHealthError(
+    container,
+    message
+) {
 
-            <h3>
-                Analysis failed
-            </h3>
+    container.innerHTML = `
+        <div class="error-card">
+
+            <h3>Analysis unavailable</h3>
 
             <p>
-                ${escapeHtml(error.message)}
+                ${escapeHtml(message)}
             </p>
 
             <button
-                class="health-button"
-                onclick="healthCheck()"
+                class="retry-button"
+                onclick="loadHealthCheck()"
             >
-                Try Again
+                Re-analyze
             </button>
 
-        `;
-
-    } finally {
-
-        healthButton.disabled = false;
-
-        healthButton.innerHTML =
-            "Run AI Analysis";
-
-    }
-
+        </div>
+    `;
 }
 
 
 // ============================================================
-// DISPLAY HEALTH DATA
+// HEALTH CHECK DISPLAY
 // ============================================================
 
-function displayHealthData(data) {
-
-    const summary =
-        data.summary || {};
-
-
-    // --------------------------------------------------------
-    // COUNTS
-    // --------------------------------------------------------
-
-    document.getElementById("highCount")
-        .textContent =
-        summary.project_count || 0;
-
-
-    document.getElementById("attentionCount")
-        .textContent =
-        summary.challenge_count || 0;
-
-
-    document.getElementById("trackCount")
-        .textContent =
-        summary.technology_count || 0;
-
-
-    // --------------------------------------------------------
-    // STATUS
-    // --------------------------------------------------------
-
-    const status =
-        summary.status || "Analyzed";
-
-
-    document.getElementById("healthTitle")
-        .textContent =
-        status;
-
-
-    // --------------------------------------------------------
-    // FINDINGS
-    // --------------------------------------------------------
-
-    const findings =
-        document.getElementById(
-            "healthFindings"
-        );
-
-
-    let findingsHtml = "";
-
-
-    if (
-        summary.overview &&
-        summary.overview.trim()
-    ) {
-
-        findingsHtml += `
-
-            <div class="finding-card">
-
-                <div class="finding-title">
-                    Overview
-                </div>
-
-                <p>
-                    ${formatText(summary.overview)}
-                </p>
-
-            </div>
-
-        `;
-
-    }
-
-
-    // --------------------------------------------------------
-    // PROJECTS
-    // --------------------------------------------------------
-
-    if (
-        Array.isArray(data.projects) &&
-        data.projects.length > 0
-    ) {
-
-        findingsHtml += createListSection(
-            "Projects",
-            data.projects
-        );
-
-    }
-
-
-    // --------------------------------------------------------
-    // ACCOMPLISHMENTS
-    // --------------------------------------------------------
-
-    if (
-        Array.isArray(data.accomplishments) &&
-        data.accomplishments.length > 0
-    ) {
-
-        findingsHtml += createListSection(
-            "Accomplishments",
-            data.accomplishments
-        );
-
-    }
-
-
-    // --------------------------------------------------------
-    // CHALLENGES
-    // --------------------------------------------------------
-
-    if (
-        Array.isArray(data.challenges) &&
-        data.challenges.length > 0
-    ) {
-
-        findingsHtml += createListSection(
-            "Challenges",
-            data.challenges
-        );
-
-    }
-
-
-    // --------------------------------------------------------
-    // LEARNING
-    // --------------------------------------------------------
-
-    if (
-        Array.isArray(data.learning) &&
-        data.learning.length > 0
-    ) {
-
-        findingsHtml += createListSection(
-            "Learning",
-            data.learning
-        );
-
-    }
-
-
-    findings.innerHTML =
-        findingsHtml;
-
-
-    // --------------------------------------------------------
-    // NEXT STEPS
-    // --------------------------------------------------------
-
-    const recommendedActions =
-        document.getElementById(
-            "recommendedActions"
-        );
-
-
-    if (
-        Array.isArray(data.next_steps) &&
-        data.next_steps.length > 0
-    ) {
-
-        recommendedActions.innerHTML =
-            data.next_steps
-                .map(
-                    step => `
-                        <div class="action-item">
-                            ${formatText(step)}
-                        </div>
-                    `
-                )
-                .join("");
-
-    } else {
-
-        recommendedActions.innerHTML =
-            `<div class="no-data">
-                No documented next steps.
-            </div>`;
-
-    }
-
-}
-
-
-// ============================================================
-// CREATE LIST SECTION
-// ============================================================
-
-function createListSection(
-    title,
-    items
+function displayHealthCheck(
+    container,
+    data
 ) {
 
-    return `
+    const summary = data.summary || {};
 
-        <div class="finding-card">
+    const projects = arrayValue(
+        data.projects
+    );
 
-            <div class="finding-title">
-                ${escapeHtml(title)}
+    const challenges = arrayValue(
+        data.challenges
+    );
+
+    const learning = arrayValue(
+        data.learning
+    );
+
+    const accomplishments = arrayValue(
+        data.accomplishments
+    );
+
+    const currentFocus = arrayValue(
+        data.current_focus
+    );
+
+    const nextSteps = arrayValue(
+        data.next_steps
+    );
+
+
+    const projectCount =
+        Number(summary.project_count) ||
+        projects.length;
+
+
+    const challengeCount =
+        Number(summary.challenge_count) ||
+        challenges.length;
+
+
+    const technologyCount =
+        Number(summary.technology_count) ||
+        0;
+
+
+    container.innerHTML = `
+
+        <div class="health-card">
+
+            <!-- HEADER -->
+
+            <div class="health-header">
+
+                <div>
+                    <h2>Internship Overview</h2>
+
+                    <p>
+                        AI analysis of your internship knowledge
+                    </p>
+                </div>
+
+                <span class="status-badge">
+                    Analyzed
+                </span>
+
             </div>
 
-            <ul class="finding-list">
 
-                ${items
-                    .map(
-                        item => `
-                            <li>
-                                ${formatText(item)}
-                            </li>
-                        `
-                    )
-                    .join("")
-                }
+            <!-- STATUS -->
 
-            </ul>
+            <div class="health-status">
+
+                <div class="status-left">
+
+                    <span class="status-dot"></span>
+
+                    <div>
+                        <strong>
+                            ${escapeHtml(
+                                summary.status || "Active"
+                            )}
+                        </strong>
+
+                        <span>
+                            AI-generated assessment
+                        </span>
+                    </div>
+
+                </div>
+
+
+                <button
+                    class="reanalyze-button"
+                    onclick="loadHealthCheck()"
+                >
+                    Re-analyze
+                </button>
+
+            </div>
+
+
+            <!-- STATISTICS -->
+
+            <div class="stats-grid">
+
+                <div class="stat-card">
+                    <strong>
+                        ${projectCount}
+                    </strong>
+
+                    <span>
+                        Projects
+                    </span>
+                </div>
+
+
+                <div class="stat-card">
+                    <strong>
+                        ${challengeCount}
+                    </strong>
+
+                    <span>
+                        Challenges
+                    </span>
+                </div>
+
+
+                <div class="stat-card">
+                    <strong>
+                        ${technologyCount}
+                    </strong>
+
+                    <span>
+                        Technologies
+                    </span>
+                </div>
+
+            </div>
+
+
+            <!-- OVERVIEW -->
+
+            <section class="health-section">
+
+                <h3>OVERVIEW</h3>
+
+                <p class="overview-text">
+                    ${escapeHtml(
+                        summary.overview ||
+                        "No overview documented."
+                    )}
+                </p>
+
+            </section>
+
+
+            <!-- PROJECTS -->
+
+            <section class="health-section">
+
+                <h3>PROJECTS</h3>
+
+                ${renderProjects(projects)}
+
+            </section>
+
+
+            <!-- ACCOMPLISHMENTS -->
+
+            <section class="health-section">
+
+                <h3>ACCOMPLISHMENTS</h3>
+
+                ${renderAccomplishments(
+                    accomplishments
+                )}
+
+            </section>
+
+
+            <!-- CHALLENGES -->
+
+            <section class="health-section">
+
+                <h3>CHALLENGES</h3>
+
+                ${renderChallenges(challenges)}
+
+            </section>
+
+
+            <!-- LEARNING -->
+
+            <section class="health-section">
+
+                <h3>LEARNING</h3>
+
+                ${renderLearning(learning)}
+
+            </section>
+
+
+            <!-- CURRENT FOCUS -->
+
+            <section class="health-section">
+
+                <h3>CURRENT FOCUS</h3>
+
+                ${renderCurrentFocus(
+                    currentFocus
+                )}
+
+            </section>
+
+
+            <!-- NEXT STEPS -->
+
+            <section class="health-section">
+
+                <h3>NEXT STEPS</h3>
+
+                ${renderNextSteps(nextSteps)}
+
+            </section>
 
         </div>
-
     `;
-
 }
 
 
 // ============================================================
-// TEXT FORMATTING
+// PROJECTS
 // ============================================================
 
-function formatText(text) {
+function renderProjects(projects) {
 
-    if (text === null || text === undefined) {
+    if (projects.length === 0) {
+
+        return `
+            <p class="empty-state">
+                No documented projects.
+            </p>
+        `;
+    }
+
+
+    return `
+        <div class="project-list">
+
+            ${projects.map(project => {
+
+                const name =
+                    project.name || "Unnamed project";
+
+                const status =
+                    project.status || "unknown";
+
+                const description =
+                    project.description ||
+                    "No description documented.";
+
+                const sources =
+                    arrayValue(project.sources);
+
+
+                return `
+                    <div class="project-item">
+
+                        <div class="item-top">
+
+                            <h4>
+                                ${escapeHtml(name)}
+                            </h4>
+
+                            <span class="
+                                project-status
+                                ${escapeHtml(status)}
+                            ">
+                                ${escapeHtml(status)}
+                            </span>
+
+                        </div>
+
+
+                        <p>
+                            ${escapeHtml(description)}
+                        </p>
+
+
+                        ${renderSources(sources)}
+
+                    </div>
+                `;
+
+            }).join("")}
+
+        </div>
+    `;
+}
+
+
+// ============================================================
+// ACCOMPLISHMENTS
+// ============================================================
+
+function renderAccomplishments(
+    accomplishments
+) {
+
+    if (accomplishments.length === 0) {
+
+        return `
+            <p class="empty-state">
+                No documented accomplishments.
+            </p>
+        `;
+    }
+
+
+    return `
+        <ul class="simple-list">
+
+            ${accomplishments.map(item => {
+
+                const description =
+                    item.description ||
+                    item.accomplishment ||
+                    "";
+
+                return `
+                    <li>
+                        ${escapeHtml(description)}
+
+                        ${renderSources(
+                            arrayValue(
+                                item.sources
+                            )
+                        )}
+                    </li>
+                `;
+
+            }).join("")}
+
+        </ul>
+    `;
+}
+
+
+// ============================================================
+// CHALLENGES
+// ============================================================
+
+function renderChallenges(challenges) {
+
+    if (challenges.length === 0) {
+
+        return `
+            <p class="empty-state">
+                No documented challenges.
+            </p>
+        `;
+    }
+
+
+    return `
+        <div class="challenge-list">
+
+            ${challenges.map(challenge => {
+
+                const title =
+                    challenge.title ||
+                    "Challenge";
+
+                const description =
+                    challenge.description ||
+                    "";
+
+                const status =
+                    challenge.status ||
+                    "encountered";
+
+
+                return `
+                    <div class="challenge-item">
+
+                        <div class="item-top">
+
+                            <h4>
+                                ${escapeHtml(title)}
+                            </h4>
+
+                            <span class="
+                                challenge-status
+                                ${escapeHtml(status)}
+                            ">
+                                ${escapeHtml(status)}
+                            </span>
+
+                        </div>
+
+                        <p>
+                            ${escapeHtml(description)}
+                        </p>
+
+                        ${renderSources(
+                            arrayValue(
+                                challenge.sources
+                            )
+                        )}
+
+                    </div>
+                `;
+
+            }).join("")}
+
+        </div>
+    `;
+}
+
+
+// ============================================================
+// LEARNING
+// ============================================================
+
+function renderLearning(learning) {
+
+    if (learning.length === 0) {
+
+        return `
+            <p class="empty-state">
+                No documented learning areas.
+            </p>
+        `;
+    }
+
+
+    return `
+        <div class="learning-list">
+
+            ${learning.map(item => {
+
+                const area =
+                    item.area ||
+                    "Learning";
+
+                const description =
+                    item.description ||
+                    "";
+
+
+                return `
+                    <div class="learning-item">
+
+                        <h4>
+                            ${escapeHtml(area)}
+                        </h4>
+
+                        <p>
+                            ${escapeHtml(description)}
+                        </p>
+
+                        ${renderSources(
+                            arrayValue(
+                                item.sources
+                            )
+                        )}
+
+                    </div>
+                `;
+
+            }).join("")}
+
+        </div>
+    `;
+}
+
+
+// ============================================================
+// CURRENT FOCUS
+// ============================================================
+
+function renderCurrentFocus(
+    currentFocus
+) {
+
+    if (currentFocus.length === 0) {
+
+        return `
+            <p class="empty-state">
+                No documented current focus.
+            </p>
+        `;
+    }
+
+
+    return `
+        <ul class="simple-list">
+
+            ${currentFocus.map(item => {
+
+                const focus =
+                    item.focus ||
+                    item.description ||
+                    "";
+
+                const source =
+                    item.source ||
+                    "";
+
+
+                return `
+                    <li>
+
+                        ${escapeHtml(focus)}
+
+                        ${
+                            source
+                                ? `
+                                    <span class="inline-source">
+                                        ${escapeHtml(source)}
+                                    </span>
+                                  `
+                                : ""
+                        }
+
+                    </li>
+                `;
+
+            }).join("")}
+
+        </ul>
+    `;
+}
+
+
+// ============================================================
+// NEXT STEPS
+// ============================================================
+
+function renderNextSteps(nextSteps) {
+
+    if (nextSteps.length === 0) {
+
+        return `
+            <p class="empty-state">
+                No documented next steps.
+            </p>
+        `;
+    }
+
+
+    return `
+        <ol class="simple-list numbered">
+
+            ${nextSteps.map(item => {
+
+                const step =
+                    item.step ||
+                    item.description ||
+                    "";
+
+                const source =
+                    item.source ||
+                    "";
+
+
+                return `
+                    <li>
+
+                        ${escapeHtml(step)}
+
+                        ${
+                            source
+                                ? `
+                                    <span class="inline-source">
+                                        ${escapeHtml(source)}
+                                    </span>
+                                  `
+                                : ""
+                        }
+
+                    </li>
+                `;
+
+            }).join("")}
+
+        </ol>
+    `;
+}
+
+
+// ============================================================
+// SOURCES
+// ============================================================
+
+function renderSources(sources) {
+
+    if (!sources.length) {
         return "";
     }
 
 
-    return escapeHtml(
-        String(text)
-    )
-    .replace(/\n/g, "<br>");
+    return `
+        <div class="source-list">
+
+            ${sources.map(source => {
+
+                return `
+                    <span class="source-tag">
+                        ${escapeHtml(source)}
+                    </span>
+                `;
+
+            }).join("")}
+
+        </div>
+    `;
 }
 
 
 // ============================================================
-// HTML ESCAPE
-// ============================================================
-
-function escapeHtml(text) {
-
-    return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-
-}
-
-
-// ============================================================
-// PAGE LOAD
+// ENTER KEY
 // ============================================================
 
 document.addEventListener(
     "DOMContentLoaded",
-    () => {
+    function () {
 
-        questionInput.focus();
+        const input =
+            getElement("question");
 
+        if (input) {
+
+            input.addEventListener(
+                "keydown",
+                function (event) {
+
+                    if (
+                        event.key === "Enter" &&
+                        !event.shiftKey
+                    ) {
+
+                        event.preventDefault();
+
+                        askQuestion();
+                    }
+                }
+            );
+        }
+
+
+        // Load health check automatically
+        loadHealthCheck();
     }
 );

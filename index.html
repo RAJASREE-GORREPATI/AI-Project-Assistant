@@ -1,7 +1,9 @@
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
+
     <meta charset="UTF-8">
 
     <meta
@@ -9,466 +11,161 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>AI Internship Memory Assistant</title>
+    <title>
+        AI Internship Memory Assistant
+    </title>
 
     <link
         rel="stylesheet"
-        href="style.css"
+        href="/style.css"
     >
+
 </head>
+
 
 <body>
 
-<header class="topbar">
+    <main class="app-container">
 
-    <div class="brand">
-        <div class="brand-mark">✦</div>
+        <!-- ================================================= -->
+        <!-- HEADER -->
+        <!-- ================================================= -->
 
-        <div class="brand-name">
-            Internship Memory
-        </div>
-    </div>
+        <header class="hero">
 
-    <div class="connection">
-        <span class="connection-dot"></span>
-        Obsidian connected
-    </div>
+            <div>
 
-</header>
-
-
-<main class="page">
-
-    <!-- HERO -->
-
-    <section class="hero">
-
-        <div class="eyebrow">
-            INTERNSHIP INTELLIGENCE
-        </div>
-
-        <h1>
-            Your internship, understood.
-        </h1>
-
-        <p>
-            Search your internship knowledge, understand your
-            projects, track your progress, and turn your
-            experience into actionable insight.
-        </p>
-
-        <div class="ai-core">
-            ✦
-        </div>
-
-    </section>
-
-
-    <!-- ASK AI -->
-
-    <section class="ask-section">
-
-        <div class="ask-card">
-
-            <div class="ask-row">
-
-                <input
-                    id="question"
-                    class="question-input"
-                    type="text"
-                    placeholder="Ask anything about your internship..."
-                    autocomplete="off"
-                >
-
-                <button
-                    id="askButton"
-                    class="ask-button"
-                    onclick="askQuestion()"
-                >
-                    Ask AI →
-                </button>
-
-            </div>
-
-        </div>
-
-
-        <!-- QUICK QUESTIONS -->
-
-        <div class="quick-prompts">
-
-            <button
-                class="quick-prompt"
-                onclick="quickAsk('What projects did I work on during my internship?')"
-            >
-                My Projects
-            </button>
-
-            <button
-                class="quick-prompt"
-                onclick="quickAsk('What technologies and tools did I use during my internship?')"
-            >
-                Technologies
-            </button>
-
-            <button
-                class="quick-prompt"
-                onclick="quickAsk('What accomplishments did I achieve during my internship?')"
-            >
-                Accomplishments
-            </button>
-
-            <button
-                class="quick-prompt"
-                onclick="quickAsk('What challenges and blockers did I encounter during my internship?')"
-            >
-                Challenges
-            </button>
-
-        </div>
-
-    </section>
-
-
-    <!-- AI RESPONSE -->
-
-    <section
-        id="answerWrapper"
-        class="answer-wrapper"
-    >
-
-        <div class="answer-card">
-
-            <div class="answer-header">
-
-                <div>
-                    <div class="answer-title">
-                        AI Response
-                    </div>
-                </div>
-
-                <div class="answer-label">
-                    INTERNSHIP KNOWLEDGE
-                </div>
-
-            </div>
-
-
-            <div
-                id="answerContent"
-                class="answer-content"
-            >
-                Ask a question to search your internship knowledge.
-            </div>
-
-        </div>
-
-    </section>
-
-
-    <!-- DASHBOARD -->
-
-    <section class="dashboard">
-
-
-        <!-- INTERNSHIP OVERVIEW -->
-
-        <div class="panel">
-
-            <div class="panel-header">
-
-                <div>
-
-                    <div class="panel-heading">
-                        <strong>
-                            Internship Overview
-                        </strong>
-                    </div>
-
-                    <div class="panel-subtitle">
-                        AI analysis of your internship knowledge
-                    </div>
-
-                </div>
-
-                <span
-                    id="healthStatus"
-                    class="panel-status"
-                >
-                    Not analyzed
-                </span>
-
-            </div>
-
-
-            <!-- EMPTY STATE -->
-
-            <div
-                id="healthEmpty"
-                class="health-empty"
-            >
-
-                <div class="empty-symbol">
-                    ◌
-                </div>
-
-                <h3>
-                    No analysis yet
-                </h3>
+                <h1>
+                    AI Internship Memory Assistant
+                </h1>
 
                 <p>
-                    Let Claude review your internship knowledge
-                    to summarize your projects, accomplishments,
-                    challenges, learning, and next steps.
+                    Ask questions about your internship
+                    using your real project knowledge.
                 </p>
-
-                <button
-                    id="healthButton"
-                    class="health-button"
-                    onclick="healthCheck()"
-                >
-                    Run AI Analysis
-                </button>
 
             </div>
 
+            <span class="live-badge">
+                AI POWERED
+            </span>
 
-            <!-- HEALTH CONTENT -->
+        </header>
 
-            <div
-                id="healthContent"
-                class="health-content"
-            >
 
-                <div class="health-summary">
+        <!-- ================================================= -->
+        <!-- ASK -->
+        <!-- ================================================= -->
 
-                    <div class="health-status-left">
+        <section class="ask-section">
 
-                        <span
-                            id="healthIndicator"
-                            class="health-indicator"
-                        ></span>
+            <h2>
+                Ask About Your Internship
+            </h2>
 
-                        <div>
+            <p class="section-description">
+                Ask about projects, technologies,
+                accomplishments, challenges, or learning.
+            </p>
 
-                            <strong id="healthTitle">
-                                Internship Progress
-                            </strong>
 
-                            <span>
-                                AI-generated assessment
-                            </span>
+            <div class="question-box">
 
-                        </div>
+                <textarea
+                    id="question"
+                    rows="4"
+                    placeholder="Example: What projects did I work on?"
+                ></textarea>
 
-                    </div>
+
+                <div class="question-actions">
+
+                    <span>
+                        Press Enter to ask
+                    </span>
 
                     <button
-                        class="reanalyze-button"
-                        onclick="healthCheck()"
+                        id="askButton"
+                        onclick="askQuestion()"
                     >
-                        Re-analyze
+                        Ask AI
                     </button>
 
                 </div>
 
+            </div>
 
-                <!-- STATISTICS -->
-
-                <div class="health-stats">
-
-                    <div class="health-stat">
-                        <span
-                            id="highCount"
-                            class="health-stat-number"
-                        >
-                            0
-                        </span>
-
-                        <span class="health-stat-label">
-                            Projects
-                        </span>
-                    </div>
+        </section>
 
 
-                    <div class="health-stat">
-                        <span
-                            id="attentionCount"
-                            class="health-stat-number"
-                        >
-                            0
-                        </span>
+        <!-- ================================================= -->
+        <!-- RESPONSE -->
+        <!-- ================================================= -->
 
-                        <span class="health-stat-label">
-                            Challenges
-                        </span>
-                    </div>
+        <section
+            id="response"
+            class="response-container"
+        >
 
+            <div class="empty-card">
 
-                    <div class="health-stat">
-                        <span
-                            id="trackCount"
-                            class="health-stat-number"
-                        >
-                            0
-                        </span>
+                <h2>
+                    AI Response
+                </h2>
 
-                        <span class="health-stat-label">
-                            Technologies
-                        </span>
-                    </div>
-
-                </div>
-
-
-                <!-- FINDINGS -->
-
-                <div
-                    id="healthFindings"
-                    class="health-findings"
-                ></div>
-
-
-                <!-- NEXT STEPS -->
-
-                <div class="actions">
-
-                    <div class="section-label">
-                        Recommended Next Steps
-                    </div>
-
-                    <div
-                        id="recommendedActions"
-                        class="recommended-actions"
-                    ></div>
-
-                </div>
+                <p>
+                    Ask a question to search your
+                    internship knowledge.
+                </p>
 
             </div>
 
-        </div>
+        </section>
 
 
-        <!-- KNOWLEDGE LAYER -->
+        <!-- ================================================= -->
+        <!-- HEALTH CHECK -->
+        <!-- ================================================= -->
 
-        <div class="panel">
+        <section
+            id="health-container"
+            class="health-container"
+        >
 
-            <div class="panel-header">
+            <div class="loading-card">
 
-                <div>
+                <div class="spinner"></div>
 
-                    <div class="panel-heading">
-                        <strong>
-                            Knowledge Layer
-                        </strong>
-                    </div>
-
-                    <div class="panel-subtitle">
-                        Sources powering the assistant
-                    </div>
-
-                </div>
-
-                <span class="panel-status">
-                    LIVE
-                </span>
+                <p>
+                    Loading internship analysis...
+                </p>
 
             </div>
 
-
-            <div class="knowledge-body">
-
-
-                <!-- OBSIDIAN -->
-
-                <div class="knowledge-row">
-
-                    <div class="knowledge-icon">
-                        ◈
-                    </div>
-
-                    <div class="knowledge-info">
-
-                        <strong>
-                            Obsidian Vault
-                        </strong>
-
-                        <span>
-                            Internship knowledge source
-                        </span>
-
-                    </div>
-
-                    <div class="live-badge">
-                        Connected
-                    </div>
-
-                </div>
+        </section>
 
 
-                <!-- CLAUDE -->
+        <!-- ================================================= -->
+        <!-- FOOTER -->
+        <!-- ================================================= -->
 
-                <div class="knowledge-row">
+        <footer>
 
-                    <div class="knowledge-icon">
-                        ✦
-                    </div>
+            <span>
+                AI Internship Memory Assistant
+            </span>
 
-                    <div class="knowledge-info">
+            <span>
+                FastAPI • Claude • Obsidian
+            </span>
 
-                        <strong>
-                            Claude Sonnet 4.6
-                        </strong>
+        </footer>
 
-                        <span>
-                            AI reasoning engine
-                        </span>
-
-                    </div>
-
-                    <div class="live-badge">
-                        Active
-                    </div>
-
-                </div>
+    </main>
 
 
-                <!-- REST API -->
-
-                <div class="knowledge-row">
-
-                    <div class="knowledge-icon">
-                        ⌁
-                    </div>
-
-                    <div class="knowledge-info">
-
-                        <strong>
-                            Obsidian REST API
-                        </strong>
-
-                        <span>
-                            Knowledge integration
-                        </span>
-
-                    </div>
-
-                    <div class="live-badge">
-                        Connected
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </section>
-
-</main>
-
-
-<script src="script.js"></script>
+    <script src="/script.js"></script>
 
 </body>
+
 </html>

@@ -1,11 +1,12 @@
 import os
 import json
+import re
 import requests
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from anthropic import Anthropic
-from fastapi.middleware.cors import CORSMiddleware
 
 
 # ============================================================
@@ -14,14 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="AI Internship Memory Assistant",
-    description="AI assistant that answers questions using internship notes stored in Obsidian.",
     version="1.0.0"
 )
 
-
-# ============================================================
-# CORS
-# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,18 +37,8 @@ OBSIDIAN_API_KEY = os.environ.get("OBSIDIAN_API_KEY")
 OBSIDIAN_URL = os.environ.get("OBSIDIAN_URL")
 
 
-if not ANTHROPIC_API_KEY:
-    print("WARNING: ANTHROPIC_API_KEY is not configured.")
-
-if not OBSIDIAN_API_KEY:
-    print("WARNING: OBSIDIAN_API_KEY is not configured.")
-
-if not OBSIDIAN_URL:
-    print("WARNING: OBSIDIAN_URL is not configured.")
-
-
 # ============================================================
-# ANTHROPIC CLIENT
+# CLIENT
 # ============================================================
 
 anthropic_client = None
@@ -64,7 +50,7 @@ if ANTHROPIC_API_KEY:
 
 
 # ============================================================
-# REQUEST MODEL
+# MODELS
 # ============================================================
 
 class Question(BaseModel):
@@ -72,10 +58,10 @@ class Question(BaseModel):
 
 
 # ============================================================
-# ENVIRONMENT VALIDATION
+# CONFIGURATION CHECK
 # ============================================================
 
-def validate_environment():
+def check_configuration():
 
     missing = []
 
@@ -88,11 +74,7 @@ def validate_environment():
     if not OBSIDIAN_URL:
         missing.append("OBSIDIAN_URL")
 
-    if missing:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Missing environment variables: {', '.join(missing)}"
-        )
+    return missing
 
 
 # ============================================================
@@ -102,16 +84,20 @@ def validate_environment():
 def obsidian_headers():
 
     return {
-        "Authorization": f"Bearer {OBSIDIAN_API_KEY}"
+        "Authorization": f"Bearer {OBSIDIAN_API_KEY}",
+        "Accept": "application/json"
     }
 
 
 def get_obsidian_notes():
 
-    validate_environment()
+    if not OBSIDIAN_URL:
+        raise RuntimeError("OBSIDIAN_URL is not configured.")
+
+    url = f"{OBSIDIAN_URL.rstrip('/')}/vault/"
 
     response = requests.get(
-        f"{OBSIDIAN_URL.rstrip('/')}/vault/",
+        url,
         headers=obsidian_headers(),
         timeout=30
     )
@@ -125,10 +111,15 @@ def get_obsidian_notes():
 
 def read_note(note_name):
 
-    validate_environment()
+    if not OBSIDIAN_URL:
+        raise RuntimeError("OBSIDIAN_URL is not configured.")
+
+    # Obsidian Local REST API expects the vault path.
+    # URL encoding is handled by requests through this URL.
+    url = f"{OBSIDIAN_URL.rstrip('/')}/vault/{note_name}"
 
     response = requests.get(
-        f"{OBSIDIAN_URL.rstrip('/')}/vault/{note_name}",
+        url,
         headers=obsidian_headers(),
         timeout=30
     )
@@ -145,7 +136,7 @@ def get_project_context():
     project_files = [
         file
         for file in files
-        if file.endswith(".md")
+        if file.lower().endswith(".md")
     ]
 
     context_parts = []
@@ -157,7 +148,7 @@ def get_project_context():
             content = read_note(file)
 
             context_parts.append(
-                f"\n--- {file} ---\n{content}"
+                f"\n\n--- {file} ---\n{content}"
             )
 
         except Exception as error:
@@ -166,79 +157,79 @@ def get_project_context():
                 f"Could not read {file}: {error}"
             )
 
-    return "\n".join(context_parts)
+    return "".join(context_parts)
 
 
 # ============================================================
-# CLAUDE JSON CLEANING
+# JSON HELPERS
 # ============================================================
 
 def clean_claude_json(raw_text):
+
+    """
+    Converts Claude's response into JSON.
+
+    Handles:
+    - ```json ... ```
+    - ``` ... ```
+    - leading/trailing text
+    """
 
     if not raw_text:
         raise ValueError("Claude returned an empty response.")
 
     text = raw_text.strip()
 
-    # --------------------------------------------------------
     # Remove markdown code fences
-    # --------------------------------------------------------
+    text = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        text,
+        flags=re.IGNORECASE
+    )
 
-    if text.startswith("```json"):
+    text = re.sub(
+        r"\s*```$",
+        "",
+        text
+    )
 
-        text = text[len("```json"):].strip()
+    text = text.strip()
 
-    elif text.startswith("```"):
-
-        text = text[len("```"):].strip()
-
-    if text.endswith("```"):
-
-        text = text[:-3].strip()
-
-    # --------------------------------------------------------
-    # Find the JSON object
-    # --------------------------------------------------------
-
+    # Find first JSON object
     start = text.find("{")
 
-    if start == -1:
+    # Find last JSON object
+    end = text.rfind("}")
 
+    if start == -1 or end == -1 or end <= start:
         raise ValueError(
-            "Claude response does not contain a JSON object."
+            "No valid JSON object found in Claude response."
         )
 
-    text = text[start:]
+    json_text = text[start:end + 1]
 
-    # --------------------------------------------------------
-    # First attempt: normal JSON parsing
-    # --------------------------------------------------------
+    return json.loads(json_text)
+
+
+def safe_json_response(raw_text):
+
+    """
+    Try to parse Claude response.
+    """
 
     try:
 
-        return json.loads(text)
+        return clean_claude_json(raw_text)
 
-    except json.JSONDecodeError:
+    except Exception as error:
 
-        pass
-
-    # --------------------------------------------------------
-    # Try to recover JSON if Claude added extra text
-    # --------------------------------------------------------
-
-    decoder = json.JSONDecoder()
-
-    try:
-
-        parsed, _ = decoder.raw_decode(text)
-
-        return parsed
-
-    except json.JSONDecodeError as error:
-
-        raise ValueError(
-            f"Invalid JSON from Claude: {error}"
+        print(
+            "Claude JSON parsing failed:",
+            error
         )
+
+        return None
 
 
 # ============================================================
@@ -250,26 +241,26 @@ def home():
 
     return {
         "message": "AI Internship Memory Assistant is running",
-        "endpoints": [
-            "/ask",
-            "/health",
-            "/health-check",
-            "/docs"
-        ]
+        "docs": "/docs",
+        "health": "/health",
+        "health_check": "/health-check"
     }
 
 
 # ============================================================
-# HEALTH
+# BASIC HEALTH
 # ============================================================
 
 @app.get("/health")
 def health():
 
+    missing = check_configuration()
+
     return {
-        "status": "ok",
-        "obsidian_configured": bool(OBSIDIAN_URL),
-        "anthropic_configured": bool(ANTHROPIC_API_KEY)
+        "status": "ok" if not missing else "configuration_error",
+        "obsidian_configured": bool(OBSIDIAN_API_KEY and OBSIDIAN_URL),
+        "anthropic_configured": bool(ANTHROPIC_API_KEY),
+        "missing_variables": missing
     }
 
 
@@ -280,19 +271,34 @@ def health():
 @app.post("/ask")
 def ask_project(question: Question):
 
+    if not question.question.strip():
+
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty."
+        )
+
+    missing = check_configuration()
+
+    if missing:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Missing environment variables: {', '.join(missing)}"
+        )
+
     try:
 
         context = get_project_context()
 
-        if not context.strip():
+    except Exception as error:
 
-            return {
-                "answer": "No internship notes were found.",
-                "key_points": [],
-                "sources": []
-            }
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to read Obsidian notes: {str(error)}"
+        )
 
-        prompt = f"""
+    prompt = f"""
 You are an AI Internship Memory Assistant.
 
 Answer the user's question using ONLY the real internship
@@ -300,31 +306,33 @@ information stored in the provided Obsidian notes.
 
 Return ONLY valid JSON.
 
-Do not use Markdown.
-Do not use ```json.
-Do not add any text before or after the JSON.
+IMPORTANT:
+- Do NOT use Markdown.
+- Do NOT use ```json.
+- Do NOT use code fences.
+- Do NOT add any text before or after the JSON.
+- Make sure the JSON is complete and valid.
 
 Use exactly this structure:
 
 {{
-    "answer": "string",
-    "key_points": ["string"],
-    "sources": ["filename.md"]
+    "answer": "",
+    "key_points": [],
+    "sources": []
 }}
 
 Rules:
 
 - Answer the user's question directly.
-- Use ONLY information found in the notes.
+- Use only information found in the notes.
 - Do not invent information.
 - Do not assume something happened if it is not documented.
 - If information is unavailable, say:
   "This is not documented in the available internship notes."
-- Keep the answer concise.
-- key_points should contain at most 5 important points.
-- sources should contain exact note filenames.
+- Keep the answer professional and concise.
+- key_points must be an array of strings.
+- sources must be an array of exact note filenames.
 - Only include sources that support the answer.
-- Do not include unnecessary details.
 
 REAL INTERNSHIP NOTES:
 
@@ -334,6 +342,8 @@ USER QUESTION:
 
 {question.question}
 """
+
+    try:
 
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-6",
@@ -346,80 +356,75 @@ USER QUESTION:
             ]
         )
 
-        raw_result = response.content[0].text.strip()
-
-        print("Claude /ask response:")
-        print(raw_result)
-
-        try:
-
-            return clean_claude_json(raw_result)
-
-        except Exception:
-
-            return {
-                "answer": raw_result,
-                "key_points": [],
-                "sources": []
-            }
-
-    except HTTPException:
-
-        raise
-
     except Exception as error:
-
-        print(
-            f"Error while processing /ask: {error}"
-        )
 
         raise HTTPException(
             status_code=500,
-            detail=f"Error while processing /ask: {str(error)}"
+            detail=f"Claude API error: {str(error)}"
         )
+
+    raw_result = response.content[0].text.strip()
+
+    parsed = safe_json_response(raw_result)
+
+    if parsed is not None:
+
+        return parsed
+
+    # Fallback instead of crashing
+    return {
+        "answer": raw_result,
+        "key_points": [],
+        "sources": []
+    }
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH CHECK / INTERNSHIP ANALYSIS
 # ============================================================
 
 @app.get("/health-check")
 def internship_health_check():
 
+    missing = check_configuration()
+
+    if missing:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Missing environment variables: {', '.join(missing)}"
+        )
+
     try:
 
         context = get_project_context()
 
-        if not context.strip():
+    except Exception as error:
 
-            return {
-                "summary": {
-                    "status": "No internship notes found",
-                    "project_count": 0,
-                    "challenge_count": 0,
-                    "technology_count": 0,
-                    "overview": "No internship information is currently available."
-                },
-                "projects": [],
-                "accomplishments": [],
-                "challenges": [],
-                "learning": [],
-                "current_focus": [],
-                "next_steps": []
-            }
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to read Obsidian notes: {str(error)}"
+        )
 
-        prompt = f"""
+    prompt = f"""
 You are an AI Internship Intelligence Assistant.
 
 Analyze the real internship notes below.
 
 Use ONLY information documented in the notes.
 
+Do not invent information.
+
 Return ONLY valid JSON.
 
-DO NOT use Markdown.
-DO NOT use ```json.
-DO NOT add explanations outside the JSON.
+VERY IMPORTANT:
+- Do NOT use Markdown.
+- Do NOT use ```json.
+- Do NOT use code fences.
+- Do NOT add explanations outside the JSON.
+- Make the response COMPLETE valid JSON.
+- Keep every description concise.
+- Do not repeat unnecessary information.
 
 Use exactly this structure:
 
@@ -439,20 +444,7 @@ Use exactly this structure:
     "next_steps": []
 }}
 
-IMPORTANT OUTPUT LIMITS:
-
-- Keep the entire response concise.
-- Maximum 8 projects.
-- Maximum 8 accomplishments.
-- Maximum 5 challenges.
-- Maximum 6 learning items.
-- Maximum 5 current_focus items.
-- Maximum 5 next_steps items.
-- Keep every description to ONE sentence.
-- Do not repeat the same information.
-- Do not include unnecessary details.
-
-PROJECT FORMAT:
+PROJECT OBJECT FORMAT:
 
 {{
     "name": "",
@@ -461,14 +453,14 @@ PROJECT FORMAT:
     "sources": []
 }}
 
-ACCOMPLISHMENT FORMAT:
+ACCOMPLISHMENT OBJECT FORMAT:
 
 {{
-    "accomplishment": "",
+    "description": "",
     "sources": []
 }}
 
-CHALLENGE FORMAT:
+CHALLENGE OBJECT FORMAT:
 
 {{
     "title": "",
@@ -477,7 +469,7 @@ CHALLENGE FORMAT:
     "sources": []
 }}
 
-LEARNING FORMAT:
+LEARNING OBJECT FORMAT:
 
 {{
     "area": "",
@@ -485,43 +477,48 @@ LEARNING FORMAT:
     "sources": []
 }}
 
-CURRENT FOCUS FORMAT:
+CURRENT FOCUS OBJECT FORMAT:
 
 {{
     "focus": "",
-    "sources": []
+    "source": ""
 }}
 
-NEXT STEP FORMAT:
+NEXT STEP OBJECT FORMAT:
 
 {{
     "step": "",
-    "sources": []
+    "source": ""
 }}
 
 RULES:
 
+- Use ONLY the internship notes.
 - Do not invent projects.
-- Do not invent accomplishments.
 - Do not invent challenges.
 - Do not invent technologies.
-- Do not invent architectural decisions.
-- Do not claim RAG, fine-tuning, SSO, etc. unless explicitly documented.
+- Do not claim RAG, fine-tuning, SSO, etc. unless documented.
+- Sources must contain exact filenames.
 - Distinguish completed, in progress, blocked and planned.
 - Do not turn missing documentation into a problem.
-- Use recent notes to determine current focus.
-- Sources must contain exact note filenames.
-- Only include sources that support the statement.
-- Keep the response professional and concise.
+- Use recent notes for current focus.
+- Keep the response concise.
+- project_count must equal the number of projects returned.
+- challenge_count must equal the number of challenges returned.
+- technology_count should represent documented technologies.
+- If there are no documented next steps, return [].
+- Make sure the JSON ends correctly and is valid.
 
 REAL INTERNSHIP NOTES:
 
 {context}
 """
 
+    try:
+
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=7000,
+            max_tokens=6000,
             messages=[
                 {
                     "role": "user",
@@ -530,75 +527,25 @@ REAL INTERNSHIP NOTES:
             ]
         )
 
-        raw_result = response.content[0].text.strip()
-
-        print("Claude /health-check response:")
-        print(raw_result)
-
-        try:
-
-            result = clean_claude_json(raw_result)
-
-            # Make sure expected keys exist.
-            result.setdefault(
-                "summary",
-                {
-                    "status": "in progress",
-                    "project_count": 0,
-                    "challenge_count": 0,
-                    "technology_count": 0,
-                    "overview": ""
-                }
-            )
-
-            result.setdefault("projects", [])
-            result.setdefault("accomplishments", [])
-            result.setdefault("challenges", [])
-            result.setdefault("learning", [])
-            result.setdefault("current_focus", [])
-            result.setdefault("next_steps", [])
-
-            return result
-
-        except Exception as error:
-
-            print(
-                f"Claude JSON parsing failed: {error}"
-            )
-
-            # ------------------------------------------------
-            # Do NOT return Claude's giant raw response to
-            # the frontend.
-            # ------------------------------------------------
-
-            return {
-                "summary": {
-                    "status": "Analysis generated but could not be parsed",
-                    "project_count": 0,
-                    "challenge_count": 0,
-                    "technology_count": 0,
-                    "overview": "Claude returned a response that could not be converted into the required JSON format."
-                },
-                "projects": [],
-                "accomplishments": [],
-                "challenges": [],
-                "learning": [],
-                "current_focus": [],
-                "next_steps": [],
-                "error": "Claude returned invalid JSON."
-            }
-
-    except HTTPException:
-
-        raise
-
     except Exception as error:
-
-        print(
-            f"Error while processing /health-check: {error}"
-        )
 
         raise HTTPException(
             status_code=500,
-            detail=f"Error while processing /health-check: {str(error)}"
+            detail=f"Claude API error: {str(error)}"
         )
+
+    raw_result = response.content[0].text.strip()
+
+    parsed = safe_json_response(raw_result)
+
+    if parsed is not None:
+
+        return parsed
+
+    # If Claude returned invalid JSON, return useful information
+    # instead of exposing a huge broken response.
+    return {
+        "error": "Claude returned invalid JSON.",
+        "message": "The internship notes were successfully read, but the AI analysis response was not valid JSON. Please click Re-analyze.",
+        "raw_response": raw_result[:3000]
+    }
