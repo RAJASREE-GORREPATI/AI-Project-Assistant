@@ -1,48 +1,35 @@
 // ============================================================
-// AI INTERNSHIP MEMORY ASSISTANT
-// FRONTEND JAVASCRIPT
+// AI PROJECT ASSISTANT - FRONTEND
 // ============================================================
 
-// Same Vercel deployment serves both frontend and API.
-const API_BASE = window.location.origin;
-
-
-// ============================================================
-// DOM HELPER
-// ============================================================
-
-function getElement(id) {
-    return document.getElementById(id);
-}
-
+// Your deployed Vercel API.
+// Because frontend and backend are deployed in the same project,
+// we can use relative URLs.
+const API_BASE = "";
 
 // ============================================================
-// SAFE HTML ESCAPING
+// DOM HELPERS
 // ============================================================
 
-function escapeHtml(value) {
+function findElement(...selectors) {
+    for (const selector of selectors) {
+        const element = document.querySelector(selector);
 
-    if (value === null || value === undefined) {
-        return "";
+        if (element) {
+            return element;
+        }
     }
 
-    return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    return null;
 }
 
+function findAll(...selectors) {
+    for (const selector of selectors) {
+        const elements = document.querySelectorAll(selector);
 
-// ============================================================
-// ARRAY HELPER
-// ============================================================
-
-function arrayValue(value) {
-
-    if (Array.isArray(value)) {
-        return value;
+        if (elements.length > 0) {
+            return elements;
+        }
     }
 
     return [];
@@ -50,63 +37,111 @@ function arrayValue(value) {
 
 
 // ============================================================
-// PARSE API RESPONSE
+// ELEMENTS
 // ============================================================
 
-async function parseResponse(response) {
+const questionInput = findElement(
+    "#question",
+    "#questionInput",
+    "#userQuestion",
+    "textarea",
+    "input[type='text']"
+);
 
-    const text = await response.text();
+const askButton = findElement(
+    "#askButton",
+    "#ask-btn",
+    "#askBtn",
+    "button"
+);
 
-    if (!text) {
-        throw new Error(
-            `Server returned an empty response (${response.status}).`
-        );
-    }
 
-    let data;
+// ============================================================
+// API HELPER
+// ============================================================
+
+async function apiRequest(endpoint, options = {}) {
+
+    const controller = new AbortController();
+
+    const timeout = setTimeout(() => {
+        controller.abort();
+    }, 60000);
 
     try {
 
-        data = JSON.parse(text);
+        const response = await fetch(
+            `${API_BASE}${endpoint}`,
+            {
+                ...options,
+                signal: controller.signal,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    ...(options.headers || {})
+                }
+            }
+        );
+
+        const text = await response.text();
+
+        let data;
+
+        try {
+            data = JSON.parse(text);
+        } catch (error) {
+
+            throw new Error(
+                `API returned invalid JSON. HTTP ${response.status}: ${text.substring(0, 500)}`
+            );
+        }
+
+        if (!response.ok) {
+
+            const message =
+                data.detail ||
+                data.error ||
+                data.message ||
+                `Request failed with status ${response.status}`;
+
+            throw new Error(message);
+        }
+
+        return data;
 
     } catch (error) {
 
-        console.error("Raw server response:", text);
+        if (error.name === "AbortError") {
+            throw new Error("Request timed out. Please try again.");
+        }
 
-        throw new Error(
-            `Server returned invalid JSON (${response.status}).`
-        );
+        throw error;
+
+    } finally {
+
+        clearTimeout(timeout);
     }
-
-    return data;
 }
 
 
 // ============================================================
-// EXTRACT CLAUDE JSON
+// CLEAN CLAUDE JSON
 // ============================================================
-//
-// Sometimes Claude returns:
-//
-// ```json
-// {
-//   ...
-// }
-// ```
-//
-// The backend may then return that inside raw_response.
-// This function safely extracts it.
-//
 
-function extractJsonFromClaudeResponse(raw) {
+function cleanClaudeJSON(data) {
 
-    if (!raw) {
-        return null;
+    // Already an object
+    if (typeof data === "object" && data !== null) {
+        return data;
     }
 
-    let text = String(raw).trim();
+    if (typeof data !== "string") {
+        return data;
+    }
 
-    // Remove markdown code fence.
+    let text = data.trim();
+
+    // Remove markdown JSON fences
     text = text.replace(/^```json\s*/i, "");
     text = text.replace(/^```\s*/i, "");
     text = text.replace(/\s*```$/i, "");
@@ -114,58 +149,16 @@ function extractJsonFromClaudeResponse(raw) {
     text = text.trim();
 
     try {
-
         return JSON.parse(text);
-
     } catch (error) {
 
-        console.error(
-            "Could not parse Claude JSON:",
-            error
-        );
+        console.error("Could not parse Claude JSON:", text);
 
-        return null;
+        return {
+            error: "Claude returned invalid JSON.",
+            raw_response: text
+        };
     }
-}
-
-
-// ============================================================
-// NORMALIZE HEALTH RESPONSE
-// ============================================================
-
-function normalizeHealthResponse(data) {
-
-    // Normal valid response
-    if (
-        data &&
-        typeof data === "object" &&
-        data.summary
-    ) {
-        return data;
-    }
-
-
-    // Backend may return:
-    //
-    // {
-    //   "error": "Claude returned invalid JSON.",
-    //   "raw_response": "```json {...}"
-    // }
-    //
-    if (data && data.raw_response) {
-
-        const extracted =
-            extractJsonFromClaudeResponse(
-                data.raw_response
-            );
-
-        if (extracted) {
-            return extracted;
-        }
-    }
-
-
-    return data;
 }
 
 
@@ -173,297 +166,155 @@ function normalizeHealthResponse(data) {
 // ASK AI
 // ============================================================
 
-async function askQuestion() {
+async function askAI(question) {
 
-    const input =
-        getElement("question");
+    if (!question || !question.trim()) {
 
-    const answerContent =
-        getElement("answerContent");
-
-
-    if (!input) {
-
-        console.error(
-            "question input not found."
-        );
+        showAskError("Please enter a question.");
 
         return;
     }
 
-
-    if (!answerContent) {
-
-        console.error(
-            "answerContent element not found."
-        );
-
-        return;
-    }
-
-
-    const question =
-        input.value.trim();
-
-
-    if (!question) {
-
-        showAskError(
-            "Please enter a question."
-        );
-
-        return;
-    }
-
-
-    setAskLoading(true);
-
-
-    // Show loading immediately.
-    answerContent.innerHTML = `
-        <div class="loading-card">
-            <div class="spinner"></div>
-
-            <p>
-                Searching your internship knowledge...
-            </p>
-        </div>
-    `;
-
+    showAskLoading();
 
     try {
 
-        const response = await fetch(
-            `${API_BASE}/ask`,
+        const result = await apiRequest(
+            "/ask",
             {
                 method: "POST",
 
-                headers: {
-                    "Content-Type":
-                        "application/json",
-
-                    "Accept":
-                        "application/json"
-                },
-
                 body: JSON.stringify({
-                    question: question
+                    question: question.trim()
                 })
             }
         );
 
+        const data = cleanClaudeJSON(result);
 
-        const data =
-            await parseResponse(response);
+        console.log("ASK RESPONSE:", data);
 
+        if (data.error && !data.answer) {
 
-        if (!response.ok) {
-
-            throw new Error(
-                data.detail ||
-                data.message ||
-                "Unable to process the question."
+            showAskError(
+                data.error ||
+                "Unable to get an answer."
             );
+
+            return;
         }
 
+        renderAskResponse(data);
 
-        displayAskResponse(data);
+    } catch (error) {
 
+        console.error("ASK ERROR:", error);
+
+        showAskError(
+            error.message ||
+            "Unable to connect to the AI assistant."
+        );
+    }
+}
+
+
+// ============================================================
+// HEALTH CHECK / ANALYSIS
+// ============================================================
+
+async function loadHealthCheck() {
+
+    const overviewContainer = findElement(
+        "#healthCheck",
+        "#health-check",
+        "#analysis",
+        "#overview",
+        ".health-check",
+        ".analysis"
+    );
+
+    if (overviewContainer) {
+
+        overviewContainer.innerHTML = `
+            <div class="loading-message">
+                Analyzing your internship knowledge...
+            </div>
+        `;
+    }
+
+    try {
+
+        console.log("Calling /health-check...");
+
+        const result = await apiRequest(
+            "/health-check",
+            {
+                method: "GET"
+            }
+        );
+
+        console.log("HEALTH CHECK RESPONSE:", result);
+
+        const data = cleanClaudeJSON(result);
+
+        console.log("CLEAN HEALTH DATA:", data);
+
+        if (data.error) {
+
+            console.error(
+                "Health check returned error:",
+                data.error
+            );
+
+            showHealthError(
+                data.error,
+                data.raw_response
+            );
+
+            return;
+        }
+
+        renderHealthCheck(data);
 
     } catch (error) {
 
         console.error(
-            "Ask AI error:",
+            "HEALTH CHECK ERROR:",
             error
         );
 
-
-        showAskError(
+        showHealthError(
             error.message ||
-            "Something went wrong while asking the AI."
+            "Unable to analyze internship knowledge."
         );
-
-
-    } finally {
-
-        setAskLoading(false);
     }
 }
 
 
 // ============================================================
-// QUICK QUESTIONS
+// ASK LOADING
 // ============================================================
 
-function quickAsk(question) {
+function showAskLoading() {
 
-    const input =
-        getElement("question");
+    const responseContainer = findElement(
+        "#aiResponse",
+        "#response",
+        "#answer",
+        ".ai-response",
+        ".response"
+    );
 
-
-    if (!input) {
-
-        console.error(
-            "Question input not found."
-        );
-
+    if (!responseContainer) {
+        console.warn("AI response container not found.");
         return;
     }
 
-
-    // Put question into input.
-    input.value = question;
-
-
-    // Ask immediately.
-    askQuestion();
-}
-
-
-// ============================================================
-// DISPLAY ASK RESPONSE
-// ============================================================
-
-function displayAskResponse(data) {
-
-    const container =
-        getElement("answerContent");
-
-
-    if (!container) {
-
-        console.error(
-            "answerContent not found."
-        );
-
-        return;
-    }
-
-
-    const answer =
-        data.answer ||
-        "No answer returned.";
-
-
-    const keyPoints =
-        arrayValue(data.key_points);
-
-
-    const sources =
-        arrayValue(data.sources);
-
-
-    let html = `
-
-        <div class="response-content">
-
-            <div class="answer-text">
-                ${escapeHtml(answer)}
-            </div>
-
-    `;
-
-
-    // ========================================================
-    // KEY POINTS
-    // ========================================================
-
-    if (keyPoints.length > 0) {
-
-        html += `
-
-            <div class="response-section">
-
-                <h3>
-                    KEY POINTS
-                </h3>
-
-                <ul>
-        `;
-
-
-        keyPoints.forEach(point => {
-
-            html += `
-                <li>
-                    ${escapeHtml(point)}
-                </li>
-            `;
-
-        });
-
-
-        html += `
-
-                </ul>
-
-            </div>
-
-        `;
-    }
-
-
-    // ========================================================
-    // SOURCES
-    // ========================================================
-
-    if (sources.length > 0) {
-
-        html += `
-
-            <div class="response-section">
-
-                <h3>
-                    SOURCES
-                </h3>
-
-                <div class="source-list">
-        `;
-
-
-        sources.forEach(source => {
-
-            html += `
-                <span class="source-tag">
-                    ${escapeHtml(source)}
-                </span>
-            `;
-
-        });
-
-
-        html += `
-
-                </div>
-
-            </div>
-
-        `;
-    }
-
-
-    html += `
-
+    responseContainer.innerHTML = `
+        <div class="loading-message">
+            Thinking...
         </div>
-
     `;
-
-
-    container.innerHTML = html;
-
-
-    // Scroll to answer.
-    const wrapper =
-        getElement("answerWrapper");
-
-
-    if (wrapper) {
-
-        wrapper.scrollIntoView({
-            behavior: "smooth",
-            block: "start"
-        });
-    }
 }
 
 
@@ -473,212 +324,24 @@ function displayAskResponse(data) {
 
 function showAskError(message) {
 
-    const container =
-        getElement("answerContent");
+    const responseContainer = findElement(
+        "#aiResponse",
+        "#response",
+        "#answer",
+        ".ai-response",
+        ".response"
+    );
 
-
-    if (!container) {
+    if (!responseContainer) {
+        alert(message);
         return;
     }
 
-
-    container.innerHTML = `
-
-        <div class="error-card">
-
-            <h3>
-                Something went wrong
-            </h3>
-
-            <p>
-                ${escapeHtml(message)}
-            </p>
-
+    responseContainer.innerHTML = `
+        <div class="error-message">
+            ${escapeHTML(message)}
         </div>
-
     `;
-}
-
-
-// ============================================================
-// ASK LOADING
-// ============================================================
-
-function setAskLoading(isLoading) {
-
-    const button =
-        getElement("askButton");
-
-
-    const input =
-        getElement("question");
-
-
-    if (button) {
-
-        button.disabled =
-            isLoading;
-
-
-        button.textContent =
-            isLoading
-                ? "Thinking..."
-                : "Ask AI →";
-    }
-
-
-    if (input) {
-
-        input.disabled =
-            isLoading;
-    }
-}
-
-
-// ============================================================
-// HEALTH CHECK
-// ============================================================
-//
-// IMPORTANT:
-// Your HTML calls:
-//
-// onclick="healthCheck()"
-//
-// So this function MUST exist.
-//
-
-async function healthCheck() {
-
-    const healthEmpty =
-        getElement("healthEmpty");
-
-
-    const healthContent =
-        getElement("healthContent");
-
-
-    const healthButton =
-        getElement("healthButton");
-
-
-    if (!healthContent) {
-
-        console.error(
-            "healthContent not found."
-        );
-
-        return;
-    }
-
-
-    // Hide empty state.
-    if (healthEmpty) {
-        healthEmpty.style.display = "none";
-    }
-
-
-    // Show content.
-    healthContent.style.display =
-        "block";
-
-
-    // Loading state.
-    healthContent.innerHTML = `
-
-        <div class="loading-card">
-
-            <div class="spinner"></div>
-
-            <p>
-                Analyzing your internship knowledge...
-            </p>
-
-        </div>
-
-    `;
-
-
-    if (healthButton) {
-        healthButton.disabled = true;
-    }
-
-
-    try {
-
-        const response =
-            await fetch(
-                `${API_BASE}/health-check`,
-                {
-                    method: "GET",
-
-                    headers: {
-                        "Accept":
-                            "application/json"
-                    },
-
-                    cache: "no-store"
-                }
-            );
-
-
-        const data =
-            await parseResponse(response);
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                data.detail ||
-                data.message ||
-                data.error ||
-                "Health check failed."
-            );
-        }
-
-
-        const normalizedData =
-            normalizeHealthResponse(data);
-
-
-        if (
-            !normalizedData ||
-            !normalizedData.summary
-        ) {
-
-            throw new Error(
-                normalizedData &&
-                normalizedData.error
-                    ? normalizedData.error
-                    : "Invalid health check response."
-            );
-        }
-
-
-        displayHealthCheck(
-            normalizedData
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "Health check error:",
-            error
-        );
-
-
-        showHealthError(
-            error.message ||
-            "Unable to load internship analysis."
-        );
-
-
-    } finally {
-
-        if (healthButton) {
-            healthButton.disabled = false;
-        }
-    }
 }
 
 
@@ -686,916 +349,724 @@ async function healthCheck() {
 // HEALTH ERROR
 // ============================================================
 
-function showHealthError(message) {
+function showHealthError(message, rawResponse = "") {
 
-    const healthContent =
-        getElement("healthContent");
+    const container = findElement(
+        "#healthCheck",
+        "#health-check",
+        "#analysis",
+        "#overview",
+        ".health-check",
+        ".analysis"
+    );
 
-
-    const healthEmpty =
-        getElement("healthEmpty");
-
-
-    if (!healthContent) {
+    if (!container) {
+        console.error(message);
         return;
     }
 
-
-    if (healthEmpty) {
-        healthEmpty.style.display = "none";
-    }
-
-
-    healthContent.style.display =
-        "block";
-
-
-    healthContent.innerHTML = `
-
-        <div class="error-card">
-
-            <h3>
-                Analysis unavailable
-            </h3>
-
-            <p>
-                ${escapeHtml(message)}
-            </p>
-
-            <button
-                class="retry-button"
-                onclick="healthCheck()"
-            >
-                Re-analyze
-            </button>
-
+    container.innerHTML = `
+        <div class="error-message">
+            <strong>Unable to analyze internship knowledge.</strong>
+            <br><br>
+            ${escapeHTML(message)}
         </div>
-
     `;
+
+    if (rawResponse) {
+
+        console.log(
+            "Raw health-check response:",
+            rawResponse
+        );
+    }
 }
 
 
 // ============================================================
-// DISPLAY HEALTH CHECK
+// RENDER ASK RESPONSE
 // ============================================================
 
-function displayHealthCheck(data) {
+function renderAskResponse(data) {
 
-    const healthEmpty =
-        getElement("healthEmpty");
+    const responseContainer = findElement(
+        "#aiResponse",
+        "#response",
+        "#answer",
+        ".ai-response",
+        ".response"
+    );
 
+    if (!responseContainer) {
 
-    const healthContent =
-        getElement("healthContent");
-
-
-    const healthStatus =
-        getElement("healthStatus");
-
-
-    const healthIndicator =
-        getElement("healthIndicator");
-
-
-    const healthTitle =
-        getElement("healthTitle");
-
-
-    const highCount =
-        getElement("highCount");
-
-
-    const attentionCount =
-        getElement("attentionCount");
-
-
-    const trackCount =
-        getElement("trackCount");
-
-
-    const healthFindings =
-        getElement("healthFindings");
-
-
-    const recommendedActions =
-        getElement("recommendedActions");
-
-
-    if (!healthContent) {
-
-        console.error(
-            "healthContent not found."
+        console.warn(
+            "Could not find AI response container."
         );
 
         return;
     }
 
+    const answer =
+        data.answer ||
+        "No answer was returned.";
 
-    // ========================================================
-    // SHOW HEALTH CONTENT
-    // ========================================================
+    const keyPoints =
+        Array.isArray(data.key_points)
+            ? data.key_points
+            : [];
 
-    if (healthEmpty) {
+    const sources =
+        Array.isArray(data.sources)
+            ? data.sources
+            : [];
 
-        healthEmpty.style.display =
-            "none";
-    }
+    let html = "";
 
+    html += `
+        <div class="response-answer">
+            ${formatText(answer)}
+        </div>
+    `;
 
-    healthContent.style.display =
-        "block";
+    if (keyPoints.length > 0) {
 
+        html += `
+            <div class="response-section">
+                <h3>KEY POINTS</h3>
+                <ul>
+        `;
 
-    // ========================================================
-    // DATA
-    // ========================================================
+        keyPoints.forEach(point => {
 
-    const summary =
-        data.summary || {};
+            html += `
+                <li>${formatText(String(point))}</li>
+            `;
+        });
 
-
-    const projects =
-        arrayValue(data.projects);
-
-
-    const accomplishments =
-        arrayValue(data.accomplishments);
-
-
-    const challenges =
-        arrayValue(data.challenges);
-
-
-    const learning =
-        arrayValue(data.learning);
-
-
-    const currentFocus =
-        arrayValue(data.current_focus);
-
-
-    const nextSteps =
-        arrayValue(data.next_steps);
-
-
-    // ========================================================
-    // COUNTS
-    // ========================================================
-
-    const projectCount =
-        Number(summary.project_count) ||
-        projects.length;
-
-
-    const challengeCount =
-        Number(summary.challenge_count) ||
-        challenges.length;
-
-
-    const technologyCount =
-        Number(summary.technology_count) ||
-        0;
-
-
-    // ========================================================
-    // UPDATE TOP STATUS
-    // ========================================================
-
-    if (healthStatus) {
-
-        healthStatus.textContent =
-            "Analyzed";
-
-        healthStatus.classList.add(
-            "analyzed"
-        );
-    }
-
-
-    if (healthIndicator) {
-
-        healthIndicator.classList.add(
-            "active"
-        );
-    }
-
-
-    if (healthTitle) {
-
-        healthTitle.textContent =
-            capitalize(
-                summary.status ||
-                "Active"
-            );
-    }
-
-
-    // ========================================================
-    // STATISTICS
-    // ========================================================
-
-    if (highCount) {
-
-        highCount.textContent =
-            projectCount;
-    }
-
-
-    if (attentionCount) {
-
-        attentionCount.textContent =
-            challengeCount;
-    }
-
-
-    if (trackCount) {
-
-        trackCount.textContent =
-            technologyCount;
-    }
-
-
-    // ========================================================
-    // FINDINGS
-    // ========================================================
-
-    if (healthFindings) {
-
-        healthFindings.innerHTML = `
-
-            <div class="health-section">
-
-                <div class="section-label">
-                    OVERVIEW
-                </div>
-
-                <p class="overview-text">
-                    ${escapeHtml(
-                        summary.overview ||
-                        "No overview documented."
-                    )}
-                </p>
-
+        html += `
+                </ul>
             </div>
-
-
-            <div class="health-section">
-
-                <div class="section-label">
-                    PROJECTS
-                </div>
-
-                ${renderProjects(projects)}
-
-            </div>
-
-
-            <div class="health-section">
-
-                <div class="section-label">
-                    ACCOMPLISHMENTS
-                </div>
-
-                ${renderAccomplishments(
-                    accomplishments
-                )}
-
-            </div>
-
-
-            <div class="health-section">
-
-                <div class="section-label">
-                    CHALLENGES
-                </div>
-
-                ${renderChallenges(
-                    challenges
-                )}
-
-            </div>
-
-
-            <div class="health-section">
-
-                <div class="section-label">
-                    LEARNING
-                </div>
-
-                ${renderLearning(
-                    learning
-                )}
-
-            </div>
-
-
-            <div class="health-section">
-
-                <div class="section-label">
-                    CURRENT FOCUS
-                </div>
-
-                ${renderCurrentFocus(
-                    currentFocus
-                )}
-
-            </div>
-
         `;
     }
 
+    if (sources.length > 0) {
 
-    // ========================================================
-    // NEXT STEPS
-    // ========================================================
+        html += `
+            <div class="response-section">
+                <h3>SOURCES</h3>
+                <div class="source-list">
+        `;
 
-    if (recommendedActions) {
+        sources.forEach(source => {
 
-        recommendedActions.innerHTML =
-            renderNextSteps(
-                nextSteps
+            html += `
+                <span class="source-tag">
+                    ${escapeHTML(String(source))}
+                </span>
+            `;
+        });
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    responseContainer.innerHTML = html;
+}
+
+
+// ============================================================
+// RENDER HEALTH CHECK
+// ============================================================
+
+function renderHealthCheck(data) {
+
+    console.log(
+        "Rendering health check:",
+        data
+    );
+
+    // --------------------------------------------------------
+    // Try to find the overview card
+    // --------------------------------------------------------
+
+    const container = findElement(
+        "#healthCheck",
+        "#health-check",
+        "#analysis",
+        "#overview",
+        ".health-check",
+        ".analysis"
+    );
+
+    // --------------------------------------------------------
+    // STATUS
+    // --------------------------------------------------------
+
+    const statusElement = findElement(
+        "#status",
+        "#healthStatus",
+        ".status"
+    );
+
+    if (statusElement && data.summary) {
+
+        statusElement.textContent =
+            data.summary.status || "Analyzed";
+    }
+
+    // --------------------------------------------------------
+    // PROJECT COUNT
+    // --------------------------------------------------------
+
+    updateNumber(
+        [
+            "#projectCount",
+            "#projectsCount",
+            "[data-stat='projects']",
+            "[data-count='projects']"
+        ],
+        data.summary?.project_count ??
+        (Array.isArray(data.projects)
+            ? data.projects.length
+            : 0)
+    );
+
+    // --------------------------------------------------------
+    // CHALLENGE COUNT
+    // --------------------------------------------------------
+
+    updateNumber(
+        [
+            "#challengeCount",
+            "#challengesCount",
+            "[data-stat='challenges']",
+            "[data-count='challenges']"
+        ],
+        data.summary?.challenge_count ??
+        (Array.isArray(data.challenges)
+            ? data.challenges.length
+            : 0)
+    );
+
+    // --------------------------------------------------------
+    // TECHNOLOGY COUNT
+    // --------------------------------------------------------
+
+    updateNumber(
+        [
+            "#technologyCount",
+            "#technologiesCount",
+            "[data-stat='technologies']",
+            "[data-count='technologies']"
+        ],
+        data.summary?.technology_count ??
+        (Array.isArray(data.technologies)
+            ? data.technologies.length
+            : 0)
+    );
+
+    // --------------------------------------------------------
+    // OVERVIEW
+    // --------------------------------------------------------
+
+    const overviewElement = findElement(
+        "#overviewText",
+        "#overview",
+        ".overview-text",
+        "[data-section='overview']"
+    );
+
+    if (overviewElement && data.summary) {
+
+        overviewElement.textContent =
+            data.summary.overview || "";
+    }
+
+    // --------------------------------------------------------
+    // PROJECTS
+    // --------------------------------------------------------
+
+    renderList(
+        [
+            "#projects",
+            "#projectList",
+            ".projects-list",
+            "[data-section='projects']"
+        ],
+        data.projects,
+        project => {
+
+            if (typeof project === "string") {
+                return escapeHTML(project);
+            }
+
+            return `
+                <strong>
+                    ${escapeHTML(project.name || "Project")}
+                </strong>
+
+                ${
+                    project.status
+                        ? `<span class="status-badge">
+                            ${escapeHTML(project.status)}
+                           </span>`
+                        : ""
+                }
+
+                ${
+                    project.description
+                        ? `<div>
+                            ${escapeHTML(project.description)}
+                           </div>`
+                        : ""
+                }
+            `;
+        }
+    );
+
+    // --------------------------------------------------------
+    // ACCOMPLISHMENTS
+    // --------------------------------------------------------
+
+    renderList(
+        [
+            "#accomplishments",
+            "#accomplishmentList",
+            ".accomplishments-list",
+            "[data-section='accomplishments']"
+        ],
+        data.accomplishments,
+        item => {
+
+            if (typeof item === "string") {
+                return escapeHTML(item);
+            }
+
+            return escapeHTML(
+                item.description ||
+                item.accomplishment ||
+                ""
             );
+        }
+    );
+
+    // --------------------------------------------------------
+    // CHALLENGES
+    // --------------------------------------------------------
+
+    renderList(
+        [
+            "#challenges",
+            "#challengeList",
+            ".challenges-list",
+            "[data-section='challenges']"
+        ],
+        data.challenges,
+        item => {
+
+            if (typeof item === "string") {
+                return escapeHTML(item);
+            }
+
+            return `
+                <strong>
+                    ${escapeHTML(
+                        item.title ||
+                        item.challenge ||
+                        "Challenge"
+                    )}
+                </strong>
+
+                ${
+                    item.status
+                        ? `<span class="status-badge">
+                            ${escapeHTML(item.status)}
+                           </span>`
+                        : ""
+                }
+
+                ${
+                    item.description
+                        ? `<div>
+                            ${escapeHTML(item.description)}
+                           </div>`
+                        : ""
+                }
+            `;
+        }
+    );
+
+    // --------------------------------------------------------
+    // LEARNING
+    // --------------------------------------------------------
+
+    renderList(
+        [
+            "#learning",
+            "#learningList",
+            ".learning-list",
+            "[data-section='learning']"
+        ],
+        data.learning,
+        item => {
+
+            if (typeof item === "string") {
+                return escapeHTML(item);
+            }
+
+            return `
+                <strong>
+                    ${escapeHTML(
+                        item.area ||
+                        "Learning"
+                    )}
+                </strong>
+
+                ${
+                    item.description
+                        ? `<div>
+                            ${escapeHTML(item.description)}
+                           </div>`
+                        : ""
+                }
+            `;
+        }
+    );
+
+    // --------------------------------------------------------
+    // CURRENT FOCUS
+    // --------------------------------------------------------
+
+    renderList(
+        [
+            "#currentFocus",
+            "#current-focus",
+            "#focusList",
+            "[data-section='current-focus']"
+        ],
+        data.current_focus,
+        item => {
+
+            if (typeof item === "string") {
+                return escapeHTML(item);
+            }
+
+            return escapeHTML(
+                item.focus ||
+                item.description ||
+                item.step ||
+                ""
+            );
+        }
+    );
+
+    // --------------------------------------------------------
+    // NEXT STEPS
+    // --------------------------------------------------------
+
+    renderList(
+        [
+            "#nextSteps",
+            "#next-steps",
+            "#nextStepsList",
+            "[data-section='next-steps']"
+        ],
+        data.next_steps,
+        item => {
+
+            if (typeof item === "string") {
+                return escapeHTML(item);
+            }
+
+            return escapeHTML(
+                item.step ||
+                item.description ||
+                ""
+            );
+        }
+    );
+
+    // --------------------------------------------------------
+    // If we couldn't find a specific container,
+    // log the response for debugging.
+    // --------------------------------------------------------
+
+    if (!container) {
+
+        console.warn(
+            "Health-check data was received, but the expected health-check container was not found."
+        );
+
+        console.log(
+            "Health-check data:",
+            data
+        );
     }
 }
 
 
 // ============================================================
-// CAPITALIZE
+// UPDATE NUMBER
 // ============================================================
 
-function capitalize(value) {
+function updateNumber(selectors, value) {
 
-    if (!value) {
+    const element = findElement(...selectors);
+
+    if (!element) {
+        return;
+    }
+
+    element.textContent = value;
+}
+
+
+// ============================================================
+// RENDER LIST
+// ============================================================
+
+function renderList(
+    selectors,
+    items,
+    formatter
+) {
+
+    const element = findElement(...selectors);
+
+    if (!element) {
+        return;
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+
+        element.innerHTML = `
+            <li>No documented information.</li>
+        `;
+
+        return;
+    }
+
+    element.innerHTML = items
+        .map(item => {
+
+            return `
+                <li>
+                    ${formatter(item)}
+                </li>
+            `;
+        })
+        .join("");
+}
+
+
+// ============================================================
+// TEXT FORMAT
+// ============================================================
+
+function formatText(text) {
+
+    return escapeHTML(text)
+        .replace(/\n/g, "<br>");
+}
+
+
+// ============================================================
+// HTML ESCAPE
+// ============================================================
+
+function escapeHTML(value) {
+
+    if (value === null || value === undefined) {
         return "";
     }
 
+    const div = document.createElement("div");
 
-    const text =
-        String(value);
+    div.textContent = String(value);
+
+    return div.innerHTML;
+}
 
 
-    return (
-        text.charAt(0).toUpperCase() +
-        text.slice(1)
+// ============================================================
+// ASK BUTTON
+// ============================================================
+
+function setupAskButton() {
+
+    if (!askButton) {
+
+        console.warn(
+            "Ask button was not found."
+        );
+
+        return;
+    }
+
+    askButton.addEventListener(
+        "click",
+        function(event) {
+
+            event.preventDefault();
+
+            const question =
+                questionInput
+                    ? questionInput.value
+                    : "";
+
+            askAI(question);
+        }
     );
 }
 
 
 // ============================================================
-// PROJECTS
+// ENTER KEY
 // ============================================================
 
-function renderProjects(projects) {
+function setupQuestionInput() {
 
-    if (!projects.length) {
-
-        return `
-            <p class="empty-state">
-                No documented projects.
-            </p>
-        `;
+    if (!questionInput) {
+        return;
     }
 
+    questionInput.addEventListener(
+        "keydown",
+        function(event) {
 
-    return `
+            if (
+                event.key === "Enter" &&
+                !event.shiftKey
+            ) {
 
-        <div class="project-list">
+                event.preventDefault();
 
-            ${projects.map(project => {
+                const question =
+                    questionInput.value;
 
-                // Protect against unexpected object formats.
-                if (
-                    !project ||
-                    typeof project !== "object"
-                ) {
-
-                    return "";
-                }
-
-
-                const name =
-                    project.name ||
-                    "Unnamed project";
-
-
-                const status =
-                    project.status ||
-                    "unknown";
+                askAI(question);
+            }
+        }
+    );
+}
 
 
-                const description =
-                    project.description ||
-                    "No description documented.";
+// ============================================================
+// QUICK QUESTION BUTTONS
+// ============================================================
 
+function setupQuickQuestions() {
 
-                const sources =
-                    arrayValue(
-                        project.sources
+    const buttons = document.querySelectorAll(
+        "button"
+    );
+
+    buttons.forEach(button => {
+
+        const text =
+            button.textContent
+                .trim()
+                .toLowerCase();
+
+        if (
+            text.includes("my projects") ||
+            text.includes("projects")
+        ) {
+
+            button.addEventListener(
+                "click",
+                function(event) {
+
+                    event.preventDefault();
+
+                    askAI(
+                        "What projects did I work on?"
                     );
-
-
-                return `
-
-                    <div class="project-item">
-
-                        <div class="item-top">
-
-                            <h4>
-                                ${escapeHtml(name)}
-                            </h4>
-
-                            <span
-                                class="project-status ${escapeHtml(status)}"
-                            >
-                                ${escapeHtml(status)}
-                            </span>
-
-                        </div>
-
-
-                        <p>
-                            ${escapeHtml(description)}
-                        </p>
-
-
-                        ${renderSources(sources)}
-
-                    </div>
-
-                `;
-
-            }).join("")}
-
-        </div>
-
-    `;
-}
-
-
-// ============================================================
-// ACCOMPLISHMENTS
-// ============================================================
-
-function renderAccomplishments(
-    accomplishments
-) {
-
-    if (!accomplishments.length) {
-
-        return `
-            <p class="empty-state">
-                No documented accomplishments.
-            </p>
-        `;
-    }
-
-
-    return `
-
-        <ul class="simple-list">
-
-            ${accomplishments.map(item => {
-
-                if (
-                    !item ||
-                    typeof item !== "object"
-                ) {
-                    return "";
-                }
-
-
-                const description =
-                    item.description ||
-                    item.accomplishment ||
-                    "";
-
-
-                const sources =
-                    arrayValue(
-                        item.sources
-                    );
-
-
-                return `
-
-                    <li>
-
-                        ${escapeHtml(description)}
-
-                        ${renderSources(
-                            sources
-                        )}
-
-                    </li>
-
-                `;
-
-            }).join("")}
-
-        </ul>
-
-    `;
-}
-
-
-// ============================================================
-// CHALLENGES
-// ============================================================
-
-function renderChallenges(challenges) {
-
-    if (!challenges.length) {
-
-        return `
-            <p class="empty-state">
-                No documented challenges.
-            </p>
-        `;
-    }
-
-
-    return `
-
-        <div class="challenge-list">
-
-            ${challenges.map(challenge => {
-
-                if (
-                    !challenge ||
-                    typeof challenge !== "object"
-                ) {
-                    return "";
-                }
-
-
-                const title =
-                    challenge.title ||
-                    challenge.challenge ||
-                    "Challenge";
-
-
-                const description =
-                    challenge.description ||
-                    "";
-
-
-                const status =
-                    challenge.status ||
-                    "encountered";
-
-
-                const sources =
-                    arrayValue(
-                        challenge.sources
-                    );
-
-
-                return `
-
-                    <div class="challenge-item">
-
-                        <div class="item-top">
-
-                            <h4>
-                                ${escapeHtml(title)}
-                            </h4>
-
-                            <span
-                                class="challenge-status ${escapeHtml(status)}"
-                            >
-                                ${escapeHtml(status)}
-                            </span>
-
-                        </div>
-
-
-                        <p>
-                            ${escapeHtml(description)}
-                        </p>
-
-
-                        ${renderSources(sources)}
-
-                    </div>
-
-                `;
-
-            }).join("")}
-
-        </div>
-
-    `;
-}
-
-
-// ============================================================
-// LEARNING
-// ============================================================
-
-function renderLearning(learning) {
-
-    if (!learning.length) {
-
-        return `
-            <p class="empty-state">
-                No documented learning areas.
-            </p>
-        `;
-    }
-
-
-    return `
-
-        <div class="learning-list">
-
-            ${learning.map(item => {
-
-                if (
-                    !item ||
-                    typeof item !== "object"
-                ) {
-                    return "";
-                }
-
-
-                const area =
-                    item.area ||
-                    item.name ||
-                    "Learning";
-
-
-                const description =
-                    item.description ||
-                    "";
-
-
-                const sources =
-                    arrayValue(
-                        item.sources
-                    );
-
-
-                return `
-
-                    <div class="learning-item">
-
-                        <h4>
-                            ${escapeHtml(area)}
-                        </h4>
-
-                        <p>
-                            ${escapeHtml(description)}
-                        </p>
-
-                        ${renderSources(sources)}
-
-                    </div>
-
-                `;
-
-            }).join("")}
-
-        </div>
-
-    `;
-}
-
-
-// ============================================================
-// CURRENT FOCUS
-// ============================================================
-
-function renderCurrentFocus(
-    currentFocus
-) {
-
-    if (!currentFocus.length) {
-
-        return `
-            <p class="empty-state">
-                No documented current focus.
-            </p>
-        `;
-    }
-
-
-    return `
-
-        <ul class="simple-list">
-
-            ${currentFocus.map(item => {
-
-                if (
-                    !item ||
-                    typeof item !== "object"
-                ) {
-                    return "";
-                }
-
-
-                const focus =
-                    item.focus ||
-                    item.description ||
-                    item.step ||
-                    "";
-
-
-                const source =
-                    item.source ||
-                    "";
-
-
-                return `
-
-                    <li>
-
-                        ${escapeHtml(focus)}
-
-                        ${
-                            source
-                                ? `
-                                    <span class="inline-source">
-                                        ${escapeHtml(source)}
-                                    </span>
-                                  `
-                                : ""
-                        }
-
-                    </li>
-
-                `;
-
-            }).join("")}
-
-        </ul>
-
-    `;
-}
-
-
-// ============================================================
-// NEXT STEPS
-// ============================================================
-
-function renderNextSteps(nextSteps) {
-
-    if (!nextSteps.length) {
-
-        return `
-            <p class="empty-state">
-                No documented next steps.
-            </p>
-        `;
-    }
-
-
-    return `
-
-        <ol class="simple-list numbered">
-
-            ${nextSteps.map(item => {
-
-                if (
-                    !item ||
-                    typeof item !== "object"
-                ) {
-                    return "";
-                }
-
-
-                const step =
-                    item.step ||
-                    item.description ||
-                    item.next_step ||
-                    "";
-
-
-                const source =
-                    item.source ||
-                    "";
-
-
-                return `
-
-                    <li>
-
-                        ${escapeHtml(step)}
-
-                        ${
-                            source
-                                ? `
-                                    <span class="inline-source">
-                                        ${escapeHtml(source)}
-                                    </span>
-                                  `
-                                : ""
-                        }
-
-                    </li>
-
-                `;
-
-            }).join("")}
-
-        </ol>
-
-    `;
-}
-
-
-// ============================================================
-// SOURCES
-// ============================================================
-
-function renderSources(sources) {
-
-    if (!sources.length) {
-        return "";
-    }
-
-
-    return `
-
-        <div class="source-list">
-
-            ${sources.map(source => {
-
-                return `
-
-                    <span class="source-tag">
-                        ${escapeHtml(source)}
-                    </span>
-
-                `;
-
-            }).join("")}
-
-        </div>
-
-    `;
-}
-
-
-// ============================================================
-// INITIALIZATION
-// ============================================================
-
-document.addEventListener(
-    "DOMContentLoaded",
-    function () {
-
-        console.log(
-            "AI Internship Memory Assistant loaded."
-        );
-
-
-        console.log(
-            "API:",
-            API_BASE
-        );
-
-
-        // ====================================================
-        // ASK INPUT
-        // ====================================================
-
-        const input =
-            getElement("question");
-
-
-        if (input) {
-
-            input.addEventListener(
-                "keydown",
-                function (event) {
-
-                    if (
-                        event.key === "Enter" &&
-                        !event.shiftKey
-                    ) {
-
-                        event.preventDefault();
-
-                        askQuestion();
-                    }
                 }
             );
         }
 
+        else if (
+            text.includes("technologies") ||
+            text.includes("technology")
+        ) {
 
-        // ====================================================
-        // DO NOT AUTOMATICALLY CALL HEALTH CHECK
-        // ====================================================
-        //
-        // The user should click:
-        //
-        // "Run AI Analysis"
-        //
-        // or:
-        //
-        // "Re-analyze"
-        //
-        // ====================================================
+            button.addEventListener(
+                "click",
+                function(event) {
 
+                    event.preventDefault();
+
+                    askAI(
+                        "What technologies and tools did I use during my internship?"
+                    );
+                }
+            );
+        }
+
+        else if (
+            text.includes("accomplishments")
+        ) {
+
+            button.addEventListener(
+                "click",
+                function(event) {
+
+                    event.preventDefault();
+
+                    askAI(
+                        "What accomplishments did I achieve during my internship?"
+                    );
+                }
+            );
+        }
+
+        else if (
+            text.includes("challenges")
+        ) {
+
+            button.addEventListener(
+                "click",
+                function(event) {
+
+                    event.preventDefault();
+
+                    askAI(
+                        "What challenges did I face during my internship?"
+                    );
+                }
+            );
+        }
+    });
+}
+
+
+// ============================================================
+// PAGE INITIALIZATION
+// ============================================================
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        console.log(
+            "AI Project Assistant frontend loaded."
+        );
+
+        console.log(
+            "API:",
+            window.location.origin
+        );
+
+        setupAskButton();
+
+        setupQuestionInput();
+
+        setupQuickQuestions();
+
+        // Load internship analysis
+        loadHealthCheck();
     }
 );
