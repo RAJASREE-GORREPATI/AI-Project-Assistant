@@ -143,6 +143,37 @@ function cleanSourceName(value) {
 
 
 // ============================================================
+// TRUNCATE TEXT
+// ------------------------------------------------------------
+// Used for the collapsed one-line summary shown on structured
+// cards before the user expands them.
+// ============================================================
+
+function truncateText(value, maxLength) {
+
+    if (!value) {
+        return "";
+    }
+
+    const clean =
+        String(value)
+            .replace(/\s+/g, " ")
+            .trim();
+
+
+    if (clean.length <= maxLength) {
+        return clean;
+    }
+
+
+    return clean
+        .slice(0, maxLength)
+        .trim() + "…";
+
+}
+
+
+// ============================================================
 // PARSE POSSIBLE CLAUDE JSON
 // ============================================================
 
@@ -1505,16 +1536,22 @@ function createStructuredCard(
 
     // --------------------------------------------------------
     // TITLE
+    // ------------------------------------------------------------
+    // Only use a title if the data actually provides one. Most
+    // Accomplishments/Learning entries have no name/title field,
+    // so we no longer fall back to a generic "Internship Item"
+    // heading — the collapsed summary below (a trimmed version
+    // of the description) stands in for it instead.
     // --------------------------------------------------------
 
-    const title =
+    const realTitle =
         item.name ||
         item.title ||
         item.area ||
         item.focus ||
         item.step ||
         item.action ||
-        "Internship Item";
+        null;
 
 
     // --------------------------------------------------------
@@ -1548,6 +1585,18 @@ function createStructuredCard(
         );
 
 
+    // --------------------------------------------------------
+    // COLLAPSED SUMMARY
+    // ------------------------------------------------------------
+    // Whatever is always visible before the card is expanded.
+    // --------------------------------------------------------
+
+    const summaryText =
+        realTitle ||
+        truncateText(description, 80) ||
+        "Untitled";
+
+
     let html = `
 
         <div class="finding-card structured-card">
@@ -1558,9 +1607,24 @@ function createStructuredCard(
 
             <div class="card-body">
 
-                <div class="finding-title">
-                    ${escapeHtml(title)}
-                </div>
+                <button
+                    type="button"
+                    class="card-toggle"
+                    onclick="toggleCard(this)"
+                    aria-expanded="false"
+                >
+
+                    <span class="card-summary">
+                        ${escapeHtml(summaryText)}
+                    </span>
+
+                    <span class="card-chevron">
+                        ⌄
+                    </span>
+
+                </button>
+
+                <div class="card-details">
 
     `;
 
@@ -1583,6 +1647,27 @@ function createStructuredCard(
                 ${escapeHtml(
                     formatStatus(status)
                 )}
+            </div>
+
+        `;
+
+    }
+
+
+    // --------------------------------------------------------
+    // FULL TITLE (only if a real title exists AND differs from
+    // the description, so it's not shown twice)
+    // --------------------------------------------------------
+
+    if (
+        realTitle &&
+        description
+    ) {
+
+        html += `
+
+            <div class="finding-title">
+                ${escapeHtml(realTitle)}
             </div>
 
         `;
@@ -1675,6 +1760,8 @@ function createStructuredCard(
 
     html += `
 
+                </div>
+
             </div>
 
         </div>
@@ -1683,6 +1770,124 @@ function createStructuredCard(
 
 
     return html;
+
+}
+
+
+// ============================================================
+// TOGGLE CARD
+// ------------------------------------------------------------
+// Expands/collapses a structured card's .card-details block.
+// Animates height via JS since content length is variable.
+// ============================================================
+
+function toggleCard(button) {
+
+    const card =
+        button.closest(
+            ".structured-card"
+        );
+
+
+    if (!card) {
+        return;
+    }
+
+
+    const details =
+        card.querySelector(
+            ".card-details"
+        );
+
+
+    if (!details) {
+        return;
+    }
+
+
+    const isOpen =
+        card.classList.contains(
+            "expanded"
+        );
+
+
+    if (isOpen) {
+
+        // Collapse: pin current height, then animate to 0.
+
+        details.style.maxHeight =
+            details.scrollHeight + "px";
+
+
+        requestAnimationFrame(
+            () => {
+
+                details.style.maxHeight =
+                    "0px";
+
+            }
+        );
+
+
+        card.classList.remove(
+            "expanded"
+        );
+
+
+        button.setAttribute(
+            "aria-expanded",
+            "false"
+        );
+
+    } else {
+
+        // Expand: animate to full content height, then release
+        // the fixed height so it can adapt (e.g. window resize).
+
+        card.classList.add(
+            "expanded"
+        );
+
+
+        details.style.maxHeight =
+            details.scrollHeight + "px";
+
+
+        button.setAttribute(
+            "aria-expanded",
+            "true"
+        );
+
+
+        const clearMaxHeight =
+            () => {
+
+                if (
+                    card.classList.contains(
+                        "expanded"
+                    )
+                ) {
+
+                    details.style.maxHeight =
+                        "none";
+
+                }
+
+
+                details.removeEventListener(
+                    "transitionend",
+                    clearMaxHeight
+                );
+
+            };
+
+
+        details.addEventListener(
+            "transitionend",
+            clearMaxHeight
+        );
+
+    }
 
 }
 
@@ -2010,112 +2215,18 @@ function showConnectionDetails(
 
     card.innerHTML = `
 
-        <div class="connection-header">
-
-            <div>
-
-                <div class="connection-title">
-                    Connection Details
-                </div>
-
-                <div class="connection-subtitle">
-                    Live status of the AI knowledge pipeline
-                </div>
-
-            </div>
-
-            <span class="connection-status ${overallClass}">
-                ${escapeHtml(overallStatus)}
-            </span>
-
-        </div>
-
-
-        <div class="connection-items">
-
-            <div class="connection-item">
-
-                <div class="connection-icon">
-                    ◈
-                </div>
-
-                <div class="connection-info">
-
-                    <strong>
-                        Obsidian Vault
-                    </strong>
-
-                    <span>
-                        Internship knowledge source
-                    </span>
-
-                </div>
-
-                <span class="connection-badge good">
-                    Connected
-                </span>
-
-            </div>
-
-
-            <div class="connection-item">
-
-                <div class="connection-icon">
-                    ✦
-                </div>
-
-                <div class="connection-info">
-
-                    <strong>
-                        Claude Sonnet
-                    </strong>
-
-                    <span>
-                        AI reasoning engine
-                    </span>
-
-                </div>
-
-                <span class="connection-badge good">
-                    Active
-                </span>
-
-            </div>
-
-
-            <div class="connection-item">
-
-                <div class="connection-icon">
-                    ↝
-                </div>
-
-                <div class="connection-info">
-
-                    <strong>
-                        FastAPI Backend
-                    </strong>
-
-                    <span>
-                        ${escapeHtml(
-                            API_BASE_URL
-                        )}
-                    </span>
-
-                </div>
-
-                <span class="connection-badge good">
-                    Online
-                </span>
-
-            </div>
-
-        </div>
-
-
         <div class="connection-analysis">
 
-            <div class="connection-analysis-title">
-                Analysis Status
+            <div class="connection-analysis-header">
+
+                <div class="connection-analysis-title">
+                    Analysis Status
+                </div>
+
+                <span class="connection-status ${overallClass}">
+                    ${escapeHtml(overallStatus)}
+                </span>
+
             </div>
 
             <div class="connection-analysis-text">
@@ -2492,6 +2603,9 @@ window.healthCheck =
 
 window.testBackend =
     testBackend;
+
+window.toggleCard =
+    toggleCard;
 
 
 // ============================================================
